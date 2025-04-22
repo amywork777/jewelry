@@ -26,14 +26,14 @@ export default function JewelryPage() {
   ]
   
   const handleAIClick = () => {
-    // Redirect to customizer page with search text as query param
+    // Redirect to generate page with search text as query param
     if (searchText.trim()) {
-      console.log(`Redirecting to customizer with prompt: ${searchText.trim()}`);
+      console.log(`Redirecting to generate with prompt: ${searchText.trim()}`);
       // Use window.location for client-side navigation with query params
-      window.location.href = `/customizer?prompt=${encodeURIComponent(searchText.trim())}`;
+      window.location.href = `/generate?prompt=${encodeURIComponent(searchText.trim())}`;
     } else {
-      // If there's no search text, just navigate to the customizer page
-      window.location.href = `/customizer`;
+      // If there's no search text, just navigate to the generate page
+      window.location.href = `/generate`;
     }
   }
   
@@ -276,7 +276,7 @@ export default function JewelryPage() {
       <div className="w-full max-w-md text-center">
         <h2 className="text-lg font-light mb-6">Create your unique piece</h2>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Link href="/customizer">
+          <Link href="/generate">
             <Button className="bg-gray-900 hover:bg-gray-800 text-white rounded-full px-6">
               Start Creating
             </Button>
