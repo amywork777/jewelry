@@ -1,19 +1,86 @@
 import { NextRequest, NextResponse } from 'next/server';
+import path from 'path';
+import fs from 'fs';
+// @ts-ignore - node-fetch types may not match exactly
+import fetch from 'node-fetch';
+import crypto from 'crypto';
 
-// Define CORS headers for consistent use
+// Ensure we use dynamic routes that don't cache
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
+
+// Directory for caching models
+const CACHE_DIR = path.join(process.cwd(), 'model-cache');
+
+// Ensure cache directory exists
+try {
+  if (!fs.existsSync(CACHE_DIR)) {
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+  }
+} catch (err) {
+  console.error('Error creating cache directory:', err);
+  // Continue even if cache directory creation fails
+}
+
+// Generate a safe filename from a URL
+function getSafeFilename(url: string): string {
+  // Create MD5 hash of the URL to use as filename
+  return crypto.createHash('md5').update(url).digest('hex');
+}
+
+// Check if a file is cached
+function isFileCached(filename: string): boolean {
+  try {
+    const filePath = path.join(CACHE_DIR, filename);
+    return fs.existsSync(filePath);
+  } catch (err) {
+    console.error('Error checking cache:', err);
+    return false;
+  }
+}
+
+// CORS headers for consistent use
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, HEAD',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept, Range',
+  'Access-Control-Allow-Credentials': 'true',
+  'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Content-Type',
   'Access-Control-Max-Age': '86400',
+  'Cross-Origin-Resource-Policy': 'cross-origin',
+  'Cross-Origin-Embedder-Policy': 'credentialless',
 };
 
-/**
- * Model proxy to handle CORS issues and AWS S3 signed URLs
- * 
- * This API route acts as a proxy for model files, allowing frontend to access models
- * from remote servers that might have CORS restrictions or require special headers.
- */
+// Get proper content type based on file extension
+function getContentType(url: string, defaultType = 'application/octet-stream'): string {
+  if (url.includes('.stl') || url.endsWith('.stl')) {
+    return 'model/stl';
+  } else if (url.includes('.glb') || url.endsWith('.glb')) {
+    return 'model/gltf-binary';
+  } else if (url.includes('.gltf') || url.endsWith('.gltf')) {
+    return 'model/gltf+json';
+  } else if (url.includes('.webp') || url.endsWith('.webp')) {
+    return 'image/webp';
+  } else if (url.includes('.jpg') || url.includes('.jpeg') || url.endsWith('.jpg') || url.endsWith('.jpeg')) {
+    return 'image/jpeg';
+  } else if (url.includes('.png') || url.endsWith('.png')) {
+    return 'image/png';
+  }
+  return defaultType;
+}
+
+// Get response headers for the model
+function getModelResponseHeaders(contentType: string, contentLength: number): HeadersInit {
+  return {
+    'Content-Type': contentType,
+    'Content-Length': contentLength.toString(),
+    'Cache-Control': 'public, max-age=31536000', // 1 year cache
+    ...corsHeaders
+  };
+}
+
+// Main proxy function
 export async function GET(request: NextRequest) {
   try {
     // Get URL from query parameter
@@ -82,49 +149,221 @@ export async function GET(request: NextRequest) {
       finalUrl = targetUrl;
     }
     
-    // Determine additional headers for Tripo URLs
-    const headers: HeadersInit = {
-      'User-Agent': 'Mozilla/5.0 (compatible; ModelProxyBot/1.0)',
-    };
-    
-    // For Tripo URLs, we might need to add the Authorization header
-    if (finalUrl.includes('tripo-data.rg1.data.tripo3d.com') || 
-        finalUrl.includes('tripo3d.ai')) {
-      const TRIPO_API_KEY = process.env.TRIPO_API_KEY;
-      if (TRIPO_API_KEY) {
-        headers['Authorization'] = `Bearer ${TRIPO_API_KEY}`;
+    // Try to retrieve from cache first if caching is enabled
+    const cacheKey = getSafeFilename(finalUrl);
+    const cacheFilePath = path.join(CACHE_DIR, cacheKey);
+
+    // Check if we have this file cached
+    if (isFileCached(cacheKey)) {
+      try {
+        console.log(`✅ [model-proxy] Serving from cache: ${cacheKey}`);
+        const cachedData = fs.readFileSync(cacheFilePath);
+        
+        // Determine content type based on URL or force image if specified
+        let contentType = getContentType(finalUrl);
+        if (forceImageRedirect) {
+          if (finalUrl.endsWith('.webp')) {
+            contentType = 'image/webp';
+          } else if (finalUrl.endsWith('.jpg') || finalUrl.endsWith('.jpeg')) {
+            contentType = 'image/jpeg';
+          } else if (finalUrl.endsWith('.png')) {
+            contentType = 'image/png';
+          }
+        }
+        
+        // Serve from cache
+        return new NextResponse(cachedData, {
+          headers: getModelResponseHeaders(contentType, cachedData.length)
+        });
+      } catch (cacheError) {
+        console.error(`❌ [model-proxy] Error reading from cache:`, cacheError);
+        // Continue with fetching if cache read fails
       }
     }
     
-    console.log(`🔄 [model-proxy] Fetching original URL: ${finalUrl.substring(0, 100)}...`);
+    // Prepare specific request headers based on the URL type
+    const headers: HeadersInit = {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    };
     
-    // Fetch the file
-    const response = await fetch(finalUrl, {
-      headers,
-      redirect: 'follow',
-    }).catch(error => {
-      console.error(`❌ [model-proxy] Fetch error:`, error);
-      throw new Error(`Failed to fetch model: ${error.message}`);
-    });
+    // Special headers for Tripo URLs
+    if (finalUrl.includes('tripo-data.rg1.data.tripo3d.com') || 
+        finalUrl.includes('tripo3d.ai')) {
+      // For signed URLs with Policy and Signature
+      if (finalUrl.includes('Policy=') && finalUrl.includes('Signature=')) {
+        console.log('🔑 [model-proxy] Using signed URL headers');
+        
+        // Use minimal headers for signed URLs (too many headers can cause issues)
+        // Strip all headers and just use essential ones 
+        headers = {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          'Accept': '*/*',
+          'Accept-Language': 'en-US,en;q=0.9',
+        };
+      } else {
+        // For API urls
+        const TRIPO_API_KEY = process.env.TRIPO_API_KEY || "tsk_mJ1s2uXtjEes3y0JrYbL3cObVcL5sBbdTdRjQUB_4dJ";
+        Object.assign(headers, {
+          'Authorization': `Bearer ${TRIPO_API_KEY}`,
+          'Origin': 'https://magic.taiyaki.ai',
+          'Referer': 'https://magic.taiyaki.ai/',
+          'Accept': '*/*',
+          'Accept-Language': 'en-US,en;q=0.9'
+        });
+      }
+    }
+
+    // For signed Tripo URLs, try to load the legacy.webp image first
+    // This is more reliable than trying to load the 3D model
+    if (finalUrl.includes('Policy=') && finalUrl.includes('Signature=') && !forceImageRedirect) {
+      if (finalUrl.includes('mesh.glb')) {
+        console.log('🔄 [model-proxy] Trying to use legacy.webp for signed URL first');
+        const webpUrl = finalUrl.replace('mesh.glb', 'legacy.webp');
+        
+        try {
+          // First check if the webp image exists
+          const webpResponse = await fetch(webpUrl, {
+            method: 'HEAD',
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+              'Accept': '*/*'
+            }
+          });
+          
+          if (webpResponse.ok) {
+            console.log('🎯 [model-proxy] Found legacy.webp, using it instead');
+            finalUrl = webpUrl;
+            forceImageRedirect = true;
+          }
+        } catch (webpError) {
+          console.warn('🔶 [model-proxy] Could not check legacy.webp:', webpError);
+          // Continue with the original path
+        }
+      }
+    }
     
-    // Check if the request was successful
-    if (!response.ok) {
-      console.error(`❌ [model-proxy] Response not OK: ${response.status} ${response.statusText}`);
+    // Determine the target format - prefer STL over GLB
+    let targetFormat = 'stl';
+    if (finalUrl.endsWith('.glb') && !searchParams.has('forceGLB') && !forceImageRedirect) {
+      console.log('🔄 [model-proxy] Attempting to use STL instead of GLB');
+      const stlUrl = finalUrl.replace('.glb', '.stl');
+      finalUrl = stlUrl;
+    }
+    
+    console.log(`🔄 [model-proxy] Fetching from: ${finalUrl}`);
+
+    // Make multiple attempts with different strategies
+    let response;
+    let responseBuffer;
+    let attempts = 0;
+    const maxAttempts = 3;
+    let fallbackUsed = false;
+    
+    while (!response && attempts < maxAttempts) {
+      attempts++;
+      try {
+        console.log(`🔄 [model-proxy] Attempt ${attempts} of ${maxAttempts}`);
+        // Fetch with extended timeout
+        response = await fetch(finalUrl, {
+          method: 'GET',
+          headers,
+          redirect: 'follow',
+          // 30 second timeout
+          timeout: 30000
+        });
+        
+        if (!response.ok) {
+          console.log(`❌ [model-proxy] Fetch failed with status: ${response.status}`);
+          
+          // Special handling for STL to GLB fallback
+          if (response.status === 403 && finalUrl.endsWith('.stl')) {
+            console.log('🔄 [model-proxy] STL failed with 403, trying GLB instead');
+            const glbUrl = finalUrl.replace('.stl', '.glb');
+            finalUrl = glbUrl;
+            response = null; // Force retry with new URL
+            continue;
+          }
+          
+          // Special handling for GLB to image fallback
+          if (response.status === 403 && finalUrl.endsWith('.glb')) {
+            console.log('🔄 [model-proxy] GLB failed with 403, trying image instead');
+            const imageUrl = finalUrl.replace('.glb', '.webp');
+            if (imageUrl !== finalUrl) {
+              finalUrl = imageUrl;
+              response = null; // Force retry with image URL
+              fallbackUsed = true;
+              continue;
+            }
+          }
+          
+          throw new Error(`HTTP error: ${response.status} ${response.statusText}`);
+        }
+        
+        // Get the data
+        const arrayBuffer = await response.arrayBuffer();
+        responseBuffer = Buffer.from(arrayBuffer);
+        console.log(`✅ [model-proxy] Successfully fetched ${responseBuffer.length} bytes`);
+        
+        // Cache the response data
+        try {
+          fs.writeFileSync(cacheFilePath, responseBuffer);
+          console.log(`✅ [model-proxy] Cached to ${cacheKey}`);
+        } catch (cacheError) {
+          console.error(`❌ [model-proxy] Error caching file:`, cacheError);
+          // Continue even if caching fails
+        }
+      } catch (error) {
+        console.error(`❌ [model-proxy] Fetch attempt ${attempts} failed:`, error);
+        
+        // Try different strategy on next attempt
+        if (attempts < maxAttempts) {
+          // Add a slight delay before retry
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Special handling for STL to GLB fallback
+          if (finalUrl.endsWith('.stl') && !fallbackUsed) {
+            const glbUrl = finalUrl.replace('.stl', '.glb');
+            if (glbUrl !== finalUrl) {
+              console.log('🔄 [model-proxy] STL fetch failed, trying GLB instead');
+              finalUrl = glbUrl;
+              fallbackUsed = true;
+            }
+          }
+          // Special handling for GLB to webp fallback
+          else if (finalUrl.endsWith('.glb') && !fallbackUsed) {
+            const imageUrl = finalUrl.replace('.glb', '.webp');
+            if (imageUrl !== finalUrl) {
+              console.log('🔄 [model-proxy] GLB fetch failed, trying webp instead');
+              finalUrl = imageUrl;
+              fallbackUsed = true;
+            }
+          }
+        }
+      }
+    }
+    
+    // If all attempts failed
+    if (!response || !responseBuffer) {
+      console.error(`❌ [model-proxy] All fetch attempts failed for ${finalUrl}`);
       return NextResponse.json(
-        { 
-          error: `Failed to fetch model: ${response.status} ${response.statusText}` 
-        }, 
-        { status: response.status, headers: corsHeaders }
+        { error: "Failed to fetch model after multiple attempts" },
+        { status: 502, headers: corsHeaders }
       );
     }
     
-    // Get response data as array buffer
-    const data = await response.arrayBuffer();
+    // Determine content type - either from the response or inferred from URL
+    let contentType = response.headers.get('content-type') || getContentType(finalUrl);
     
-    // Get content type from response headers or infer from URL
-    let contentType = response.headers.get('content-type') || 'application/octet-stream';
+    // Handle specific content types
+    if (fallbackUsed && finalUrl.endsWith('.webp')) {
+      contentType = 'image/webp';
+    } else if (finalUrl.endsWith('.stl')) {
+      contentType = 'model/stl';
+    } else if (finalUrl.endsWith('.glb')) {
+      contentType = 'model/gltf-binary';
+    }
     
-    // If forcing image, set appropriate content type based on file extension
+    // Override for forced image redirects
     if (forceImageRedirect) {
       if (finalUrl.endsWith('.webp')) {
         contentType = 'image/webp';
@@ -134,39 +373,13 @@ export async function GET(request: NextRequest) {
         contentType = 'image/png';
       }
     }
-    // For model URLs, we want to ensure they are treated as binary
-    else {
-      if (finalUrl.endsWith('.glb')) {
-        contentType = 'model/gltf-binary';
-      } else if (finalUrl.endsWith('.stl')) {
-        contentType = 'application/vnd.ms-pki.stl';
-      } else if (finalUrl.endsWith('.obj')) {
-        contentType = 'application/x-tgif';
-      } else if (finalUrl.endsWith('.gltf')) {
-        contentType = 'model/gltf+json';
-      }
-    }
     
-    console.log(`✅ [model-proxy] Success: ${contentType}, size: ${(data.byteLength / 1024).toFixed(1)}KB`);
+    console.log(`✅ [model-proxy] Returning ${responseBuffer.length} bytes as ${contentType}`);
     
-    // Create a new response with the data and proper headers
-    const headers_response = new Headers();
-    headers_response.set('Content-Type', contentType);
-    headers_response.set('Content-Length', data.byteLength.toString());
-    headers_response.set('Access-Control-Allow-Origin', '*');
-    headers_response.set('Cache-Control', 'public, max-age=3600'); // 1 hour cache
-    
-    // Add task ID as a header if present
-    if (taskId) {
-      headers_response.set('X-Task-ID', taskId);
-    }
-    
-    return new NextResponse(data, {
-      status: 200,
-      statusText: 'OK',
-      headers: headers_response
+    // Return the response
+    return new NextResponse(responseBuffer, {
+      headers: getModelResponseHeaders(contentType, responseBuffer.length)
     });
-    
   } catch (error) {
     console.error(`❌ [model-proxy] Error:`, error);
     return NextResponse.json(
@@ -186,4 +399,4 @@ export async function OPTIONS(request: Request) {
 // HEAD handler for preflight checks
 export async function HEAD(request: Request) {
   return new NextResponse(null, { status: 200, headers: corsHeaders });
-} 
+}

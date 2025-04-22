@@ -133,8 +133,13 @@ async function handleTaskStatus(request: NextRequest) {
           const pathname = imageUrl.pathname;
           const directoryPath = pathname.substring(0, pathname.lastIndexOf('/') + 1);
           
-          // Construct potential model URL paths
-          const potentialModelUrl = `${imageUrl.protocol}//${imageUrl.host}${directoryPath}mesh.glb${imageUrl.search}`;
+          // Construct potential model URL paths - try STL first, then GLB as fallback
+          const potentialSTLUrl = `${imageUrl.protocol}//${imageUrl.host}${directoryPath}mesh.stl${imageUrl.search}`;
+          const potentialGLBUrl = `${imageUrl.protocol}//${imageUrl.host}${directoryPath}mesh.glb${imageUrl.search}`;
+          
+          // Prefer STL over GLB
+          console.log(`✅ [task-status] Trying to use STL model URL: ${potentialSTLUrl}`);
+          const potentialModelUrl = potentialSTLUrl;
           
           console.log(`✅ [task-status] Constructed potential model URL: ${potentialModelUrl}`);
           finalModelUrl = potentialModelUrl;
