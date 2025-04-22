@@ -14,12 +14,10 @@ import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import JewelryRing from './JewelryRing'
-import JewelryEarring from './JewelryEarring'
 import JewelryNecklace from './JewelryNecklace'
 import ModelImport from './ModelImport'
 
-type JewelryType = 'ring' | 'earring' | 'necklace'
-type EarringType = 'hoop' | 'stud' | 'drop'
+type JewelryType = 'ring' | 'necklace'
 type RingSize = '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11'
 
 // Ring size conversion (US size to diameter in mm)
@@ -36,7 +34,6 @@ const ringSizeMap: Record<RingSize, number> = {
 
 export default function JewelryViewer() {
   const [jewelryType, setJewelryType] = useState<JewelryType>('ring')
-  const [earringType, setEarringType] = useState<EarringType>('hoop')
   const [importedMesh, setImportedMesh] = useState<THREE.BufferGeometry | null>(null)
   const [charmVisible, setCharmVisible] = useState(true)
   const [ringSize, setRingSize] = useState<RingSize>('7')
@@ -45,13 +42,6 @@ export default function JewelryViewer() {
   const [ringDiameter, setRingDiameter] = useState(ringSizeMap['7'])
   const [ringThickness, setRingThickness] = useState(2)
   const [ringWidth, setRingWidth] = useState(5)
-  
-  // Earring parameters
-  const [earringSize, setEarringSize] = useState(20)
-  const [earringThickness, setEarringThickness] = useState(1.5)
-  const [hoopDiameter, setHoopDiameter] = useState(15)
-  const [studRadius, setStudRadius] = useState(4)
-  const [dropLength, setDropLength] = useState(25)
   
   // Necklace parameters
   const [necklaceLength, setNecklaceLength] = useState(450)
@@ -130,17 +120,6 @@ export default function JewelryViewer() {
                     diameter={ringDiameter} 
                     thickness={ringThickness} 
                     width={ringWidth} 
-                  />
-                )}
-                
-                {jewelryType === 'earring' && (
-                  <JewelryEarring
-                    type={earringType}
-                    size={earringSize}
-                    thickness={earringThickness}
-                    hoopDiameter={hoopDiameter}
-                    studRadius={studRadius}
-                    dropLength={dropLength}
                   />
                 )}
                 
@@ -230,18 +209,12 @@ export default function JewelryViewer() {
           <TabsContent value="base" className="space-y-4">
             <div className="space-y-2">
               <h3 className="text-lg font-medium">Jewelry Type</h3>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <Button 
                   variant={jewelryType === 'ring' ? 'default' : 'outline'} 
                   onClick={() => setJewelryType('ring')}
                 >
                   Ring
-                </Button>
-                <Button 
-                  variant={jewelryType === 'earring' ? 'default' : 'outline'} 
-                  onClick={() => setJewelryType('earring')}
-                >
-                  Earring
                 </Button>
                 <Button 
                   variant={jewelryType === 'necklace' ? 'default' : 'outline'} 
@@ -302,113 +275,6 @@ export default function JewelryViewer() {
                     onValueChange={(value) => setRingWidth(value[0])} 
                   />
                 </div>
-              </div>
-            )}
-            
-            {jewelryType === 'earring' && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <h3 className="text-lg font-medium">Earring Type</h3>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Button 
-                      variant={earringType === 'hoop' ? 'default' : 'outline'} 
-                      onClick={() => setEarringType('hoop')}
-                      size="sm"
-                    >
-                      Hoop
-                    </Button>
-                    <Button 
-                      variant={earringType === 'stud' ? 'default' : 'outline'} 
-                      onClick={() => setEarringType('stud')}
-                      size="sm"
-                    >
-                      Stud
-                    </Button>
-                    <Button 
-                      variant={earringType === 'drop' ? 'default' : 'outline'} 
-                      onClick={() => setEarringType('drop')}
-                      size="sm"
-                    >
-                      Drop
-                    </Button>
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <Label>Size (mm)</Label>
-                    <span>{earringSize} mm</span>
-                  </div>
-                  <Slider 
-                    value={[earringSize]} 
-                    min={5} 
-                    max={40} 
-                    step={0.5} 
-                    onValueChange={(value) => setEarringSize(value[0])} 
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <Label>Thickness (mm)</Label>
-                    <span>{earringThickness} mm</span>
-                  </div>
-                  <Slider 
-                    value={[earringThickness]} 
-                    min={0.5} 
-                    max={3} 
-                    step={0.1} 
-                    onValueChange={(value) => setEarringThickness(value[0])} 
-                  />
-                </div>
-                
-                {earringType === 'hoop' && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <Label>Hoop Diameter (mm)</Label>
-                      <span>{hoopDiameter} mm</span>
-                    </div>
-                    <Slider 
-                      value={[hoopDiameter]} 
-                      min={5} 
-                      max={30} 
-                      step={0.5} 
-                      onValueChange={(value) => setHoopDiameter(value[0])} 
-                    />
-                  </div>
-                )}
-                
-                {earringType === 'stud' && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <Label>Stud Radius (mm)</Label>
-                      <span>{studRadius} mm</span>
-                    </div>
-                    <Slider 
-                      value={[studRadius]} 
-                      min={2} 
-                      max={10} 
-                      step={0.5} 
-                      onValueChange={(value) => setStudRadius(value[0])} 
-                    />
-                  </div>
-                )}
-                
-                {earringType === 'drop' && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <Label>Drop Length (mm)</Label>
-                      <span>{dropLength} mm</span>
-                    </div>
-                    <Slider 
-                      value={[dropLength]} 
-                      min={10} 
-                      max={50} 
-                      step={1} 
-                      onValueChange={(value) => setDropLength(value[0])} 
-                    />
-                  </div>
-                )}
               </div>
             )}
             
