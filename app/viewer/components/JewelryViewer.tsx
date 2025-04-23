@@ -6,23 +6,20 @@ import { OrbitControls, useGLTF, Stage, Environment, Bounds, PerspectiveCamera }
 import * as THREE from 'three'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter'
-import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Slider } from "@/components/ui/slider"
 import { ChevronDown } from "lucide-react"
 import ModelImport from './ModelImport'
+import Image from 'next/image'
 
 type JewelryBaseType = 'necklace' | 'bracelet' | 'none'
 
-type CharmPreset = {
-  label: string
-  scale: number
-}
+type CharmSize = 'small' | 'medium' | 'large'
 
 export default function JewelryViewer() {
   const [importedMesh, setImportedMesh] = useState<THREE.BufferGeometry | null>(null)
@@ -31,42 +28,36 @@ export default function JewelryViewer() {
   // Base jewelry selection
   const [baseJewelryType, setBaseJewelryType] = useState<JewelryBaseType>('none')
   
-  // Base jewelry options
-  const [chainLength, setChainLength] = useState(450)
-  const [chainThickness, setChainThickness] = useState(1)
+  // Chain defaults
+  const defaultNecklaceLength = 450
+  const defaultBraceletLength = 180
+  const defaultChainThickness = 0.8
   
   // Charm parameters
-  const [charmScale, setCharmScale] = useState(1)
-  const [charmX, setCharmX] = useState(0)
-  const [charmY, setCharmY] = useState(0)
-  const [charmZ, setCharmZ] = useState(0)
-  const [charmRotateX, setCharmRotateX] = useState(0)
-  const [charmRotateY, setCharmRotateY] = useState(0)
-  const [charmRotateZ, setCharmRotateZ] = useState(0)
+  const [charmSize, setCharmSize] = useState<CharmSize>('medium')
   
   // Attachment options
-  const [showAttachmentRing, setShowAttachmentRing] = useState(false)
+  const [showAttachmentRing, setShowAttachmentRing] = useState(true)
   const [showExtensionBar, setShowExtensionBar] = useState(false)
-  const [attachmentRingSize, setAttachmentRingSize] = useState(3)
-  const [extensionLength, setExtensionLength] = useState(8)
+  const [attachmentRingSize, setAttachmentRingSize] = useState(1.5)
+  const [extensionLength, setExtensionLength] = useState(3)
   
   // Attachment controls
-  const [attachmentRotateX, setAttachmentRotateX] = useState(0)
-  const [attachmentRotateY, setAttachmentRotateY] = useState(0)
-  const [attachmentRotateZ, setAttachmentRotateZ] = useState(0)
-  const [attachmentScale, setAttachmentScale] = useState(1)
-  
-  // Collapsible states
-  const [charmPositionOpen, setCharmPositionOpen] = useState(false)
   const [attachmentOptionsOpen, setAttachmentOptionsOpen] = useState(false)
+  const [attachmentRotateY, setAttachmentRotateY] = useState(0)
+  const [attachmentScale, setAttachmentScale] = useState(1)
+  const [attachmentPositionX, setAttachmentPositionX] = useState(0)
+  const [attachmentPositionY, setAttachmentPositionY] = useState(0)
+  const [attachmentPositionZ, setAttachmentPositionZ] = useState(0)
   
-  // Preset charm sizes (approximations in 3D space)
-  const charmPresets: CharmPreset[] = [
-    { label: "Small (0.5 inch)", scale: 0.5 },
-    { label: "Medium (1 inch)", scale: 1.0 },
-    { label: "Large (1.5 inch)", scale: 1.5 },
-    { label: "Extra Large (2 inch)", scale: 2.0 },
-  ]
+  // Get scale factor based on selected size
+  const getCharmScale = (): number => {
+    switch(charmSize) {
+      case 'small': return 0.5;
+      case 'large': return 1.5;
+      default: return 1.0; // medium
+    }
+  }
   
   // Scene reference for exporting
   const sceneRef = useRef<THREE.Group>(null)
@@ -102,9 +93,10 @@ export default function JewelryViewer() {
     // This would integrate with your shopping cart functionality
     const itemDetails = {
       type: baseJewelryType,
-      length: chainLength, 
-      thickness: chainThickness,
+      length: baseJewelryType === 'necklace' ? defaultNecklaceLength : defaultBraceletLength, 
+      thickness: defaultChainThickness,
       hasCharm: !!importedMesh,
+      charmSize: charmSize,
       attachments: {
         hasRing: showAttachmentRing,
         hasExtender: showExtensionBar
@@ -113,14 +105,6 @@ export default function JewelryViewer() {
     
     alert(`Added to cart: ${baseJewelryType} with custom charm!`)
     console.log("Added to cart:", itemDetails)
-  }
-  
-  // Handle preset selection
-  const handleSizePreset = (value: string) => {
-    const preset = charmPresets.find(p => p.label === value)
-    if (preset) {
-      setCharmScale(preset.scale)
-    }
   }
   
   return (
@@ -136,13 +120,9 @@ export default function JewelryViewer() {
                 {importedMesh && charmVisible && (
                   <group>
                     <mesh
-                      position={[charmX, charmY, charmZ]}
-                      rotation={[
-                        charmRotateX * Math.PI / 180,
-                        charmRotateY * Math.PI / 180,
-                        charmRotateZ * Math.PI / 180
-                      ]}
-                      scale={charmScale}
+                      position={[0, 0, 0]}
+                      rotation={[0, 0, 0]}
+                      scale={getCharmScale()}
                     >
                       <primitive object={importedMesh} attach="geometry" />
                       <meshStandardMaterial color="#FFD700" roughness={0.1} metalness={0.9} />
@@ -150,13 +130,17 @@ export default function JewelryViewer() {
                     
                     {/* Attachment group with its own rotation and scale */}
                     <group
-                      position={[charmX, charmY, charmZ]}
-                      rotation={[
-                        (charmRotateX + attachmentRotateX) * Math.PI / 180,
-                        (charmRotateY + attachmentRotateY) * Math.PI / 180,
-                        (charmRotateZ + attachmentRotateZ) * Math.PI / 180
+                      position={[
+                        attachmentPositionX,
+                        attachmentPositionY,
+                        attachmentPositionZ
                       ]}
-                      scale={charmScale * attachmentScale}
+                      rotation={[
+                        0,
+                        attachmentRotateY * Math.PI / 180,
+                        0
+                      ]}
+                      scale={getCharmScale() * attachmentScale}
                     >
                       {/* Extension bar */}
                       {showExtensionBar && (
@@ -167,7 +151,7 @@ export default function JewelryViewer() {
                             0
                           ]}
                         >
-                          <cylinderGeometry args={[0.5, 0.5, extensionLength, 16]} />
+                          <cylinderGeometry args={[0.4, 0.4, extensionLength, 16]} />
                           <meshStandardMaterial color="#FFD700" roughness={0.1} metalness={0.9} />
                         </mesh>
                       )}
@@ -178,17 +162,17 @@ export default function JewelryViewer() {
                           position={[
                             0, 
                             showExtensionBar 
-                              ? (extensionLength + 2.5)
-                              : 5, 
+                              ? (extensionLength + 2.2)
+                              : 4, 
                             0
                           ]}
                           rotation={[
                             0,
-                            Math.PI / 2,
-                            Math.PI / 2
+                            0,
+                            0
                           ]}
                         >
-                          <torusGeometry args={[attachmentRingSize, attachmentRingSize / 4, 16, 32]} />
+                          <torusGeometry args={[attachmentRingSize, attachmentRingSize / 5, 16, 32]} />
                           <meshStandardMaterial color="#FFD700" roughness={0.1} metalness={0.9} />
                         </mesh>
                       )}
@@ -206,9 +190,9 @@ export default function JewelryViewer() {
         <div className="overflow-y-auto max-h-[600px] pr-2">
           <div className="space-y-6">
             {/* Jewelry Type Section */}
-            <div className="space-y-4">
+            <div className="space-y-3">
               <h3 className="text-lg font-medium">Jewelry Type</h3>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 mb-2">
                 Choose how you want your charm to be worn.
               </p>
               
@@ -217,19 +201,47 @@ export default function JewelryViewer() {
                 onValueChange={(value) => setBaseJewelryType(value as JewelryBaseType)}
                 className="space-y-2"
               >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="necklace" id="necklace" />
-                  <Label htmlFor="necklace" className="font-medium">
-                    Charm Necklace
-                  </Label>
+                <div className="border rounded-md overflow-hidden">
+                  <div className="flex items-center space-x-2 p-3 hover:bg-gray-50 transition-colors">
+                    <RadioGroupItem value="necklace" id="necklace" />
+                    <Label htmlFor="necklace" className="font-medium">
+                      Charm Necklace
+                    </Label>
+                  </div>
+                  {baseJewelryType === 'necklace' && (
+                    <div className="bg-gray-50 p-3 border-t">
+                      <div className="h-16 w-full bg-gray-200 rounded-md flex items-center justify-center mb-2">
+                        <p className="text-gray-500 text-xs">Necklace Image</p>
+                      </div>
+                      <p className="text-xs text-gray-600">
+                        Gold chain necklace (18 inches / 450mm) with a delicate 0.8mm chain thickness. 
+                        Perfect for displaying your custom charm as a necklace pendant.
+                      </p>
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="bracelet" id="bracelet" />
-                  <Label htmlFor="bracelet" className="font-medium">
-                    Charm Bracelet
-                  </Label>
+                
+                <div className="border rounded-md overflow-hidden">
+                  <div className="flex items-center space-x-2 p-3 hover:bg-gray-50 transition-colors">
+                    <RadioGroupItem value="bracelet" id="bracelet" />
+                    <Label htmlFor="bracelet" className="font-medium">
+                      Charm Bracelet
+                    </Label>
+                  </div>
+                  {baseJewelryType === 'bracelet' && (
+                    <div className="bg-gray-50 p-3 border-t">
+                      <div className="h-16 w-full bg-gray-200 rounded-md flex items-center justify-center mb-2">
+                        <p className="text-gray-500 text-xs">Bracelet Image</p>
+                      </div>
+                      <p className="text-xs text-gray-600">
+                        Gold chain bracelet (7 inches / 180mm) with a delicate 0.8mm chain thickness.
+                        Perfect for wearing your custom charm on your wrist.
+                      </p>
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center space-x-2">
+                
+                <div className="flex items-center space-x-2 p-3 border rounded-md hover:bg-gray-50 transition-colors">
                   <RadioGroupItem value="none" id="none" />
                   <Label htmlFor="none" className="font-medium">
                     Charm Only
@@ -238,180 +250,41 @@ export default function JewelryViewer() {
               </RadioGroup>
             </div>
             
-            {/* Chain Options (conditional based on selection) */}
-            {baseJewelryType !== 'none' && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">{baseJewelryType === 'necklace' ? 'Necklace' : 'Bracelet'} Options</h3>
-                
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <Label>Length (mm)</Label>
-                    <span>{chainLength} mm</span>
-                  </div>
-                  <Slider 
-                    value={[chainLength]} 
-                    min={baseJewelryType === 'necklace' ? 300 : 150} 
-                    max={baseJewelryType === 'necklace' ? 700 : 250} 
-                    step={10} 
-                    onValueChange={(value) => setChainLength(value[0])} 
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <Label>Chain Thickness (mm)</Label>
-                    <span>{chainThickness} mm</span>
-                  </div>
-                  <Slider 
-                    value={[chainThickness]} 
-                    min={0.5} 
-                    max={3} 
-                    step={0.1} 
-                    onValueChange={(value) => setChainThickness(value[0])} 
-                  />
-                </div>
-                
-                <div className="p-3 bg-gray-50 rounded border border-gray-200">
-                  <p className="text-sm text-gray-600">
-                    {baseJewelryType === 'necklace' 
-                      ? 'Gold chain necklace with a clasp for attaching your custom charm.' 
-                      : 'Gold chain bracelet with a clasp for attaching your custom charm.'}
-                  </p>
-                </div>
-              </div>
-            )}
-            
             <Separator />
             
             {/* Charm Section */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium">Custom Charm</h3>
-              <p className="text-sm text-gray-600">
-                Upload your own 3D STL model to create a custom charm.
-              </p>
-              
-              <div className="flex items-center space-x-2">
-                <Switch 
-                  id="charm-visible" 
-                  checked={charmVisible}
-                  onCheckedChange={setCharmVisible}
-                />
-                <Label htmlFor="charm-visible">Show Charm</Label>
-              </div>
-              
               <ModelImport onImport={handleFileImport} />
               
               {importedMesh && (
-                <div className="space-y-4">
-                  <div className="space-y-4">
-                    <div>
-                      <Label>Size Presets</Label>
-                      <Select onValueChange={handleSizePreset}>
-                        <SelectTrigger className="mt-1 w-full">
-                          <SelectValue placeholder="Choose a size" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {charmPresets.map((preset) => (
-                            <SelectItem key={preset.label} value={preset.label}>
-                              {preset.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <Label>Custom Scale</Label>
-                        <span>{charmScale.toFixed(2)}</span>
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-sm font-medium">Charm Size</Label>
+                    <RadioGroup 
+                      value={charmSize} 
+                      onValueChange={(value) => setCharmSize(value as CharmSize)}
+                      className="space-y-2 mt-1"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="small" id="size-small" />
+                        <Label htmlFor="size-small">
+                          Small (0.5 inch)
+                        </Label>
                       </div>
-                      <Slider 
-                        value={[charmScale]} 
-                        min={0.1} 
-                        max={3} 
-                        step={0.05} 
-                        onValueChange={(value) => setCharmScale(value[0])} 
-                      />
-                    </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="medium" id="size-medium" />
+                        <Label htmlFor="size-medium">
+                          Medium (1 inch)
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="large" id="size-large" />
+                        <Label htmlFor="size-large">
+                          Large (1.5 inch)
+                        </Label>
+                      </div>
+                    </RadioGroup>
                   </div>
-                  
-                  <Collapsible 
-                    open={charmPositionOpen} 
-                    onOpenChange={setCharmPositionOpen}
-                    className="border rounded-md"
-                  >
-                    <CollapsibleTrigger className="flex items-center justify-between w-full p-4 text-left">
-                      <h4 className="text-md font-medium">Advanced Position & Rotation</h4>
-                      <ChevronDown className={`h-4 w-4 transition-transform ${charmPositionOpen ? 'transform rotate-180' : ''}`} />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="p-4 pt-0 border-t">
-                      <div className="grid grid-cols-3 gap-4">
-                        <div className="space-y-2">
-                          <Label>Position X</Label>
-                          <Slider 
-                            value={[charmX]} 
-                            min={-20} 
-                            max={20} 
-                            step={0.5} 
-                            onValueChange={(value) => setCharmX(value[0])} 
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Position Y</Label>
-                          <Slider 
-                            value={[charmY]} 
-                            min={-20} 
-                            max={20} 
-                            step={0.5} 
-                            onValueChange={(value) => setCharmY(value[0])} 
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Position Z</Label>
-                          <Slider 
-                            value={[charmZ]} 
-                            min={-20} 
-                            max={20} 
-                            step={0.5} 
-                            onValueChange={(value) => setCharmZ(value[0])} 
-                          />
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-3 gap-4 mt-4">
-                        <div className="space-y-2">
-                          <Label>Rotate X (°)</Label>
-                          <Slider 
-                            value={[charmRotateX]} 
-                            min={0} 
-                            max={360} 
-                            step={5} 
-                            onValueChange={(value) => setCharmRotateX(value[0])} 
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Rotate Y (°)</Label>
-                          <Slider 
-                            value={[charmRotateY]} 
-                            min={0} 
-                            max={360} 
-                            step={5} 
-                            onValueChange={(value) => setCharmRotateY(value[0])} 
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Rotate Z (°)</Label>
-                          <Slider 
-                            value={[charmRotateZ]} 
-                            min={0} 
-                            max={360} 
-                            step={5} 
-                            onValueChange={(value) => setCharmRotateZ(value[0])} 
-                          />
-                        </div>
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
                 </div>
               )}
             </div>
@@ -430,22 +303,6 @@ export default function JewelryViewer() {
                   <Label htmlFor="attachment-ring">Add Ring Loop</Label>
                 </div>
                 
-                {showAttachmentRing && (
-                  <div className="space-y-2 ml-8">
-                    <div className="flex justify-between">
-                      <Label>Ring Size (mm)</Label>
-                      <span>{attachmentRingSize} mm</span>
-                    </div>
-                    <Slider 
-                      value={[attachmentRingSize]} 
-                      min={1} 
-                      max={6} 
-                      step={0.1} 
-                      onValueChange={(value) => setAttachmentRingSize(value[0])} 
-                    />
-                  </div>
-                )}
-                
                 <div className="flex items-center space-x-2">
                   <Switch 
                     id="extension-bar" 
@@ -454,22 +311,6 @@ export default function JewelryViewer() {
                   />
                   <Label htmlFor="extension-bar">Add Extension Bar</Label>
                 </div>
-                
-                {showExtensionBar && (
-                  <div className="space-y-2 ml-8">
-                    <div className="flex justify-between">
-                      <Label>Length (mm)</Label>
-                      <span>{extensionLength} mm</span>
-                    </div>
-                    <Slider 
-                      value={[extensionLength]} 
-                      min={3} 
-                      max={20} 
-                      step={0.5} 
-                      onValueChange={(value) => setExtensionLength(value[0])} 
-                    />
-                  </div>
-                )}
                 
                 {(showAttachmentRing || showExtensionBar) && (
                   <Collapsible 
@@ -482,6 +323,40 @@ export default function JewelryViewer() {
                       <ChevronDown className={`h-4 w-4 transition-transform ${attachmentOptionsOpen ? 'transform rotate-180' : ''}`} />
                     </CollapsibleTrigger>
                     <CollapsibleContent className="p-4 pt-0 border-t">
+                      {showAttachmentRing && (
+                        <div className="space-y-2 mb-4">
+                          <h4 className="text-sm font-medium">Ring Size</h4>
+                          <div className="flex justify-between">
+                            <Label>Ring Size (mm)</Label>
+                            <span>{attachmentRingSize} mm</span>
+                          </div>
+                          <Slider 
+                            value={[attachmentRingSize]} 
+                            min={0.5}
+                            max={4}
+                            step={0.1} 
+                            onValueChange={(value) => setAttachmentRingSize(value[0])} 
+                          />
+                        </div>
+                      )}
+                      
+                      {showExtensionBar && (
+                        <div className="space-y-2 mb-4">
+                          <h4 className="text-sm font-medium">Extension Bar</h4>
+                          <div className="flex justify-between">
+                            <Label>Length (mm)</Label>
+                            <span>{extensionLength} mm</span>
+                          </div>
+                          <Slider 
+                            value={[extensionLength]} 
+                            min={3} 
+                            max={20} 
+                            step={0.5} 
+                            onValueChange={(value) => setExtensionLength(value[0])} 
+                          />
+                        </div>
+                      )}
+                    
                       <div className="space-y-2">
                         <h4 className="text-sm font-medium">Attachment Scale</h4>
                         <div className="flex justify-between">
@@ -498,39 +373,65 @@ export default function JewelryViewer() {
                       </div>
                       
                       <div className="space-y-2 mt-4">
-                        <h4 className="text-sm font-medium">Attachment Rotation</h4>
-                        <div className="grid grid-cols-3 gap-3">
-                          <div className="space-y-1">
-                            <Label className="text-xs">X Rotation (°)</Label>
+                        <h4 className="text-sm font-medium">Attachment Position</h4>
+                        <div className="space-y-3">
+                          <div>
+                            <div className="flex justify-between">
+                              <Label>X Position (Left/Right)</Label>
+                              <span>{attachmentPositionX.toFixed(1)}</span>
+                            </div>
                             <Slider 
-                              value={[attachmentRotateX]} 
-                              min={0} 
-                              max={360} 
-                              step={5} 
-                              onValueChange={(value) => setAttachmentRotateX(value[0])} 
+                              value={[attachmentPositionX]} 
+                              min={-10} 
+                              max={10} 
+                              step={0.1} 
+                              onValueChange={(value) => setAttachmentPositionX(value[0])} 
                             />
                           </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Y Rotation (°)</Label>
+                          
+                          <div>
+                            <div className="flex justify-between">
+                              <Label>Y Position (Up/Down)</Label>
+                              <span>{attachmentPositionY.toFixed(1)}</span>
+                            </div>
                             <Slider 
-                              value={[attachmentRotateY]} 
-                              min={0} 
-                              max={360} 
-                              step={5} 
-                              onValueChange={(value) => setAttachmentRotateY(value[0])} 
+                              value={[attachmentPositionY]} 
+                              min={-10} 
+                              max={10} 
+                              step={0.1} 
+                              onValueChange={(value) => setAttachmentPositionY(value[0])} 
                             />
                           </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Z Rotation (°)</Label>
+                          
+                          <div>
+                            <div className="flex justify-between">
+                              <Label>Z Position (Front/Back)</Label>
+                              <span>{attachmentPositionZ.toFixed(1)}</span>
+                            </div>
                             <Slider 
-                              value={[attachmentRotateZ]} 
-                              min={0} 
-                              max={360} 
-                              step={5} 
-                              onValueChange={(value) => setAttachmentRotateZ(value[0])} 
+                              value={[attachmentPositionZ]} 
+                              min={-10} 
+                              max={10} 
+                              step={0.1} 
+                              onValueChange={(value) => setAttachmentPositionZ(value[0])} 
                             />
                           </div>
                         </div>
+                      </div>
+                      
+                      <div className="space-y-2 mt-4">
+                        <h4 className="text-sm font-medium">Attachment Rotation</h4>
+                        <div className="flex justify-between">
+                          <Label>Y Rotation (°)</Label>
+                          <span>{attachmentRotateY}°</span>
+                        </div>
+                        <Slider 
+                          value={[attachmentRotateY]} 
+                          min={0} 
+                          max={360} 
+                          step={5} 
+                          onValueChange={(value) => setAttachmentRotateY(value[0])} 
+                        />
                       </div>
                     </CollapsibleContent>
                   </Collapsible>
