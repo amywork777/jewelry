@@ -16,6 +16,7 @@ import { Slider } from "@/components/ui/slider"
 import { ChevronDown } from "lucide-react"
 import ModelImport from './ModelImport'
 import Image from 'next/image'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 type JewelryBaseType = 'necklace' | 'bracelet' | 'none'
 
@@ -35,6 +36,16 @@ export default function JewelryViewer() {
   
   // Charm parameters
   const [charmSize, setCharmSize] = useState<CharmSize>('medium')
+  
+  // Material options
+  const [materialType, setMaterialType] = useState<'gold' | 'silver' | 'rose-gold'>('gold')
+  
+  // Material properties mapping
+  const materialProperties = {
+    'gold': { color: '#FFD700', roughness: 0.1, metalness: 0.9 },
+    'silver': { color: '#C0C0C0', roughness: 0.1, metalness: 0.9 },
+    'rose-gold': { color: '#B76E79', roughness: 0.1, metalness: 0.9 }
+  }
   
   // Attachment options
   const [showAttachmentRing, setShowAttachmentRing] = useState(true)
@@ -109,13 +120,28 @@ export default function JewelryViewer() {
   
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div className="md:col-span-2 bg-gray-50 rounded-lg overflow-hidden" style={{ height: '600px' }}>
-        <Canvas>
+      <div className="md:col-span-2 bg-gray-50 rounded-lg overflow-hidden relative" style={{ height: '600px' }}>
+        <Canvas 
+          shadows={true}
+          dpr={[1, 2]}
+        >
           <PerspectiveCamera makeDefault position={[0, 0, 150]} fov={30} />
           <ambientLight intensity={0.5} />
-          <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1} castShadow />
+          <spotLight 
+            position={[10, 10, 10]} 
+            angle={0.15} 
+            penumbra={1} 
+            intensity={1.2} 
+            castShadow={true} 
+          />
           <Bounds fit clip observe margin={1.2}>
-            <Stage environment="city" intensity={0.5} contactShadow shadows adjustCamera={false}>
+            <Stage
+              environment="city"
+              intensity={0.5}
+              contactShadow={true}
+              shadows={true}
+              adjustCamera={false}
+            >
               <group ref={sceneRef}>
                 {importedMesh && charmVisible && (
                   <group>
@@ -125,7 +151,9 @@ export default function JewelryViewer() {
                       scale={getCharmScale()}
                     >
                       <primitive object={importedMesh} attach="geometry" />
-                      <meshStandardMaterial color="#FFD700" roughness={0.1} metalness={0.9} />
+                      <meshStandardMaterial
+                        {...materialProperties[materialType]}
+                      />
                     </mesh>
                     
                     {/* Attachment group with its own rotation and scale */}
@@ -152,7 +180,9 @@ export default function JewelryViewer() {
                           ]}
                         >
                           <cylinderGeometry args={[0.4, 0.4, extensionLength, 16]} />
-                          <meshStandardMaterial color="#FFD700" roughness={0.1} metalness={0.9} />
+                          <meshStandardMaterial
+                            {...materialProperties[materialType]}
+                          />
                         </mesh>
                       )}
                       
@@ -173,7 +203,9 @@ export default function JewelryViewer() {
                           ]}
                         >
                           <torusGeometry args={[attachmentRingSize, attachmentRingSize / 5, 16, 32]} />
-                          <meshStandardMaterial color="#FFD700" roughness={0.1} metalness={0.9} />
+                          <meshStandardMaterial
+                            {...materialProperties[materialType]}
+                          />
                         </mesh>
                       )}
                     </group>
@@ -184,6 +216,29 @@ export default function JewelryViewer() {
           </Bounds>
           <OrbitControls makeDefault />
         </Canvas>
+        
+        {/* Overlay for STL upload if no mesh is imported */}
+        {!importedMesh && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 backdrop-blur-sm">
+            <div className="bg-white p-6 rounded-lg shadow-lg max-w-md mx-auto">
+              <h3 className="text-lg font-medium mb-4 text-center">Add Charm Design</h3>
+              <ModelImport onImport={handleFileImport} />
+            </div>
+          </div>
+        )}
+        
+        {/* Small button to add a new design when one is already loaded */}
+        {importedMesh && (
+          <div className="absolute top-4 right-4">
+            <Button
+              onClick={() => setImportedMesh(null)}
+              className="bg-white hover:bg-gray-100 text-gray-800 shadow-md"
+              size="sm"
+            >
+              Change Charm Design
+            </Button>
+          </div>
+        )}
       </div>
       
       <div className="md:col-span-1">
@@ -252,44 +307,69 @@ export default function JewelryViewer() {
             
             <Separator />
             
-            {/* Charm Section */}
-            <div className="space-y-4">
-              <ModelImport onImport={handleFileImport} />
-              
-              {importedMesh && (
+            {importedMesh && (
+              <>
+                {/* Material Options */}
                 <div className="space-y-3">
-                  <div>
-                    <Label className="text-sm font-medium">Charm Size</Label>
-                    <RadioGroup 
-                      value={charmSize} 
-                      onValueChange={(value) => setCharmSize(value as CharmSize)}
-                      className="space-y-2 mt-1"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="small" id="size-small" />
-                        <Label htmlFor="size-small">
-                          Small (0.5 inch)
-                        </Label>
+                  <h3 className="text-md font-medium">Material</h3>
+                  <Select 
+                    value={materialType}
+                    onValueChange={(value) => setMaterialType(value as 'gold' | 'silver' | 'rose-gold')}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select material" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <div className="flex items-center gap-2 py-1 px-2">
+                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: materialProperties['gold'].color }}></div>
+                        <SelectItem value="gold">Gold</SelectItem>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="medium" id="size-medium" />
-                        <Label htmlFor="size-medium">
-                          Medium (1 inch)
-                        </Label>
+                      <div className="flex items-center gap-2 py-1 px-2">
+                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: materialProperties['silver'].color }}></div>
+                        <SelectItem value="silver">Silver</SelectItem>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="large" id="size-large" />
-                        <Label htmlFor="size-large">
-                          Large (1.5 inch)
-                        </Label>
+                      <div className="flex items-center gap-2 py-1 px-2">
+                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: materialProperties['rose-gold'].color }}></div>
+                        <SelectItem value="rose-gold">Rose Gold</SelectItem>
                       </div>
-                    </RadioGroup>
-                  </div>
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
-            </div>
+                
+                {/* Charm Size */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Charm Size</Label>
+                  <RadioGroup 
+                    value={charmSize} 
+                    onValueChange={(value) => setCharmSize(value as CharmSize)}
+                    className="space-y-2 mt-1"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="small" id="size-small" />
+                      <Label htmlFor="size-small">
+                        Small (0.5 inch)
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="medium" id="size-medium" />
+                      <Label htmlFor="size-medium">
+                        Medium (1 inch)
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="large" id="size-large" />
+                      <Label htmlFor="size-large">
+                        Large (1.5 inch)
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+              </>
+            )}
+
+            <Separator />
             
-            {/* Charm Attachments Section */}
+            {/* Charm Attachments Section - Moved below 3D modeler */}
             {importedMesh && (
               <div className="space-y-3">
                 <h3 className="text-md font-medium">Charm Attachments</h3>
@@ -440,26 +520,28 @@ export default function JewelryViewer() {
             )}
             
             {/* Action Buttons */}
-            <div className="space-y-3 pt-4">
-              <Button 
-                onClick={handleAddToCart}
-                className="w-full bg-purple-600 hover:bg-purple-700"
-                disabled={!importedMesh || baseJewelryType === 'none'}
-              >
-                Add to Cart
-              </Button>
-              {(!importedMesh || baseJewelryType === 'none') && (
-                <p className="text-xs text-red-500 mt-2 text-center">
-                  {!importedMesh ? "Please upload a charm first" : "Please select a jewelry type"}
-                </p>
-              )}
-              
-              {importedMesh && (
-                <Button onClick={exportSTL} variant="outline" className="w-full mt-2">
-                  Export Charm
+            {importedMesh && (
+              <div className="space-y-3 pt-4">
+                <Button 
+                  onClick={handleAddToCart}
+                  className="w-full bg-purple-600 hover:bg-purple-700"
+                  disabled={!importedMesh || baseJewelryType === 'none'}
+                >
+                  Add to Cart
                 </Button>
-              )}
-            </div>
+                {(!importedMesh || baseJewelryType === 'none') && (
+                  <p className="text-xs text-red-500 mt-2 text-center">
+                    {!importedMesh ? "Please upload a charm first" : "Please select a jewelry type"}
+                  </p>
+                )}
+                
+                {importedMesh && (
+                  <Button onClick={exportSTL} variant="outline" className="w-full mt-2">
+                    Export Charm
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

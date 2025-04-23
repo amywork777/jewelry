@@ -75,18 +75,18 @@ export default function ModelImport({ onImport }: ModelImportProps) {
     <div className="space-y-2">
       <div
         {...getRootProps()}
-        className={`border-2 border-dashed rounded-md p-4 text-center cursor-pointer transition-colors
-          ${isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}
+        className={`border-2 border-dashed rounded-md p-6 text-center cursor-pointer transition-colors
+          ${isDragActive ? 'border-purple-500 bg-purple-50' : 'border-gray-300 hover:border-purple-400'}`}
       >
         <input {...getInputProps()} />
         {loading ? (
           <p className="text-gray-500">Processing...</p>
         ) : isDragActive ? (
-          <p className="text-blue-500">Drop the STL file here</p>
+          <p className="text-purple-500">Drop the STL file here</p>
         ) : (
           <div>
-            <p className="text-gray-500">Drag & drop an STL file here, or click to select</p>
-            <Button variant="link" className="mt-2 p-0 h-auto">Select STL File</Button>
+            <p className="text-gray-600 mb-2">Drag & drop an STL file here, or click to select</p>
+            <Button className="bg-purple-600 hover:bg-purple-700 text-white">Add Charm Design</Button>
           </div>
         )}
       </div>
