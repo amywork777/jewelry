@@ -19,7 +19,7 @@ export default function JewelryNecklace({
     const tube = chainThickness / 2
     const radialSegments = 8
     const tubularSegments = 120
-    const arc = Math.PI * 1.6 // Not a complete circle to simulate an open necklace
+    const arc = Math.PI * 1.8 // Create a nearly complete circle with a small opening
     
     // Create a simple chain representation using a curved tube
     const torusGeometry = new THREE.TorusGeometry(
@@ -30,8 +30,15 @@ export default function JewelryNecklace({
       arc
     )
     
-    // Rotate to position the opening at the back of the neck
-    torusGeometry.rotateZ((2 * Math.PI - arc) / 2)
+    // Make the necklace face the camera (appear as a circle from front view)
+    // By default, torus is created in XY plane, so we need to orient it to face the camera (Z axis)
+    torusGeometry.rotateX(Math.PI / 2)
+    
+    // Place the opening at the top
+    torusGeometry.rotateZ(Math.PI / 2)
+    
+    // Rotate 90 degrees on Y axis to fix orientation
+    torusGeometry.rotateY(Math.PI / 2)
     
     // Apply a slight "droop" effect to make it look more natural
     const positions = torusGeometry.attributes.position.array;
@@ -51,42 +58,11 @@ export default function JewelryNecklace({
     return torusGeometry;
   }, [length, chainThickness])
 
-  // Create a small clasp at the back
-  const clasp = useMemo(() => {
-    const radius = length / (2 * Math.PI * 0.8);
-    const angle = 0; // At the back of the necklace
-    
-    // Position the clasp at the back opening
-    const position = new THREE.Vector3(
-      radius * Math.cos(angle),
-      radius * Math.sin(angle),
-      0
-    );
-    
-    // Create a small cylinder for the clasp
-    const claspGeometry = new THREE.CylinderGeometry(
-      chainThickness * 0.8,
-      chainThickness * 0.8,
-      chainThickness * 4,
-      8
-    );
-    
-    claspGeometry.rotateX(Math.PI / 2);
-    
-    return { geometry: claspGeometry, position };
-  }, [length, chainThickness]);
-
   return (
     <group>
       {/* Main chain */}
       <mesh>
         <primitive object={geometry} attach="geometry" />
-        <meshStandardMaterial color="#FFD700" roughness={0.1} metalness={0.9} />
-      </mesh>
-      
-      {/* Clasp */}
-      <mesh position={clasp.position}>
-        <primitive object={clasp.geometry} attach="geometry" />
         <meshStandardMaterial color="#FFD700" roughness={0.1} metalness={0.9} />
       </mesh>
     </group>
