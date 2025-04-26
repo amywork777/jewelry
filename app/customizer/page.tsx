@@ -12,8 +12,9 @@ import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js"
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js"
 import { useToast } from "@/components/ui/use-toast"
+import JewelryViewer from "@/app/viewer/components/JewelryViewer"
 
-type JewelryType = "ring" | "necklace" | "earrings" | "bracelet" | "pendant"
+type JewelryType = "ring" | "necklace" | "earrings" | "bracelet" | "pendant" | "charm"
 type Material = "gold" | "silver" | "rosegold" | "platinum"
 type Size = "small" | "medium" | "large"
 
@@ -26,49 +27,37 @@ interface JewelryItem {
   description: string
 }
 
-// Function to convert AI search to STL using Tripo API via server-side proxy
-async function generateSTLFromAI(prompt: string, updateProgress: (progress: number) => void): Promise<string> {
-  if (!prompt || prompt.trim() === "") {
-    console.error("Empty prompt received in generateSTLFromAI");
-    throw new Error("Empty prompt not allowed");
-  }
-  
-  console.log("Generating 3D model from AI with prompt:", prompt);
-  
-  // Step 1: Create a model generation task
+// Function to generate an STL model from AI
+async function generateSTLFromAI(prompt: string, updateProgress: (progress: number) => void): Promise<{ modelUrl: string | null; baseModelUrl: string | null }> {
   try {
+    // 1. Submit the prompt to start generation
+    // Call our API route, which will call the Tripo API
     const response = await fetch("/api/tripo", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
-      body: JSON.stringify({ prompt: prompt.trim() }),
+      body: JSON.stringify({ prompt })
     });
     
     if (!response.ok) {
-      let errorData = "Unknown error";
-      try {
-        const data = await response.json();
-        console.error("API error details:", data);
-        errorData = JSON.stringify(data);
-      } catch (e) {
-        console.error("Could not parse error response");
-      }
-      throw new Error(`API error: ${response.status} ${response.statusText} - ${errorData}`);
+      const errorData = await response.json();
+      console.error("Error from Tripo API:", errorData);
+      throw new Error(errorData.error || "Failed to start model generation");
     }
     
     const data = await response.json();
+    const taskId = data.taskId;
     
-    if (!data.taskId) {
-      console.error("API response missing taskId:", data);
-      throw new Error("No task ID returned from API");
+    if (!taskId) {
+      throw new Error("No task ID in response");
     }
     
-    const taskId = data.taskId;
-    console.log("Created model task with ID:", taskId);
+    console.log("Model generation started with task ID:", taskId);
     
     // Step 2: Poll for task status until completed
     let modelUrl: string | null = null;
+    let baseModelUrl: string | null = null;
     let renderedImage: string | null = null;
     let maxRetries = 5; // Increased retries
     let retryCount = 0;
@@ -90,10 +79,12 @@ async function generateSTLFromAI(prompt: string, updateProgress: (progress: numb
         // Try to get model URL from the response
         if (result.modelUrl) {
           modelUrl = result.modelUrl;
+          baseModelUrl = result.baseModelUrl;
           break;
         } else if (result.baseModelUrl) {
           // If no modelUrl but baseModelUrl exists, use that
           modelUrl = result.baseModelUrl;
+          baseModelUrl = result.baseModelUrl;
           break;
         } 
         
@@ -134,7 +125,7 @@ async function generateSTLFromAI(prompt: string, updateProgress: (progress: numb
             // If we have a rendered image but no model, we'll use a placeholder model
             // but at least we know the generation completed successfully
             console.log("No model URL after all retries, but generation succeeded. Using placeholder model.");
-            return "placeholder";
+            return { modelUrl: "placeholder", baseModelUrl: null };
           }
           throw new Error("No model URL in successful response");
         }
@@ -154,7 +145,7 @@ async function generateSTLFromAI(prompt: string, updateProgress: (progress: numb
       .substring(0, 30);        // Limit length
     
     // AI generated a valid model URL or at least a fallback
-    return modelUrl || "placeholder";
+    return { modelUrl: modelUrl || "placeholder", baseModelUrl };
   } catch (error) {
     console.error("Error in generateSTLFromAI:", error);
     throw error; // Re-throw to allow proper handling in calling code
@@ -211,11 +202,14 @@ export default function CustomizerPage() {
   const [selectedJewelry, setSelectedJewelry] = useState<JewelryItem | null>(null)
   const [selectedMaterial, setSelectedMaterial] = useState<Material>("gold")
   const [selectedSize, setSelectedSize] = useState<Size>("medium")
+  const [showBaseShape, setShowBaseShape] = useState(true)
+  
   const [isLoading, setIsLoading] = useState(false)
-  const [aiGeneratedModel, setAiGeneratedModel] = useState<string | null>(null)
-  const [aiGeneratedName, setAiGeneratedName] = useState<string>("")
-  const [generationProgress, setGenerationProgress] = useState<number>(0)
+  const [generationProgress, setGenerationProgress] = useState(0)
   const [generationError, setGenerationError] = useState<string | null>(null)
+  const [aiGeneratedModel, setAIGeneratedModel] = useState<string | null>(null)
+  const [aiGeneratedName, setAIGeneratedName] = useState<string>("")
+  const [generatedStlUrl, setGeneratedStlUrl] = useState<string | null>(null)
   
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dropAreaRef = useRef<HTMLDivElement>(null)
@@ -228,64 +222,73 @@ export default function CustomizerPage() {
   
   const { toast } = useToast()
   
-  // Define handleAIClick before it's used in any useEffect
-  const handleAIClick = useCallback(async (promptInput?: string | React.MouseEvent<HTMLButtonElement>) => {
-    // Determine if this is a direct call with a string or a click event
-    let promptToUse = searchText;
+  const handleAIClick = async () => {
+    if (!searchText.trim() || isLoading) return;
     
-    if (typeof promptInput === 'string') {
-      promptToUse = promptInput;
-      console.log("Using provided prompt:", promptToUse);
-    }
-    
-    if (!promptToUse.trim()) {
-      alert("Please enter a jewelry description for AI to generate");
-      return;
-    }
+    // Set the AI generated name for display during loading
+    setAIGeneratedName(searchText.trim());
+    setIsLoading(true);
+    setGenerationProgress(0);
+    setGenerationError(null);
     
     try {
-      setIsLoading(true);
-      setGenerationError(null);
-      setGenerationProgress(0);
-      setAiGeneratedName(promptToUse);
+      // Clean up any existing 3D objects
+      if (modelRef.current) {
+        cleanupObject(modelRef.current);
+        sceneRef.current?.remove(modelRef.current);
+        modelRef.current = null;
+      }
       
-      console.log("Starting AI generation with prompt:", promptToUse);
+      // Create a placeholder for the loading state
+      createPlaceholderModel(true);
       
-      // Start the AI generation process
-      const modelUrl = await generateSTLFromAI(promptToUse, (progress) => {
-        setGenerationProgress(progress);
-      });
+      // Generate STL from AI
+      const { modelUrl, baseModelUrl } = await generateSTLFromAI(
+        searchText,
+        (progress) => setGenerationProgress(progress)
+      );
       
-      console.log("AI generation complete, model URL:", modelUrl ? modelUrl.substring(0, 100) + "..." : "placeholder");
+      if (!modelUrl) {
+        throw new Error("Failed to generate 3D model");
+      }
       
-      // Create a custom jewelry item for the AI-generated model
-      const aiJewelry: JewelryItem = {
-        id: Date.now(), // Use timestamp as unique ID
-        type: "pendant", // Default type, could be made smarter with prompt analysis
-        name: `AI Design: ${promptToUse}`,
-        stlPath: modelUrl === "placeholder" ? "" : modelUrl, // Special handling for placeholder
-        price: 599.99, // Default price
-        description: `Custom AI-generated design based on: "${promptToUse}"`
+      console.log("AI generated model URL:", modelUrl);
+      console.log("Base model URL:", baseModelUrl);
+      
+      // Store the generated model URLs
+      setAIGeneratedModel(modelUrl);
+      setGeneratedStlUrl(modelUrl);
+      
+      // Create a new item for the AI generated model
+      const newItem: JewelryItem = {
+        id: Date.now(), // Use timestamp as a unique ID
+        type: "charm", // Default to pendant type
+        name: searchText,
+        stlPath: modelUrl, // Use the URL from the AI generation
+        price: 149.99,
+        description: `Custom ${searchText} design generated with AI.`
       };
       
-      // Set the AI generated model URL for reference
-      setAiGeneratedModel(modelUrl === "placeholder" ? null : modelUrl);
+      // Set the new item as selected
+      setSelectedJewelry(newItem);
       
-      // Update the selected jewelry item to trigger the useEffect that will load the model
-      setSelectedJewelry(aiJewelry);
-      
-      if (modelUrl === "placeholder") {
-        console.log("Using placeholder model for AI-generated design");
+      // Clean up the placeholder
+      if (modelRef.current) {
+        cleanupObject(modelRef.current);
+        sceneRef.current?.remove(modelRef.current);
+        modelRef.current = null;
       }
+      
     } catch (error) {
-      console.error("AI generation failed:", error);
-      setGenerationError(error instanceof Error ? error.message : String(error));
-      alert(`Could not generate 3D model: ${error instanceof Error ? error.message : String(error)}`);
+      console.error("Error in AI generation:", error);
+      setGenerationError(error instanceof Error ? error.message : "Unknown error");
+      
+      // Create a placeholder to show error state
+      createColorfulPlaceholder();
     } finally {
-      // We'll keep the loading state active until the model is fully loaded
-      // in the useEffect hook that loads the model
+      setIsLoading(false);
     }
-  }, [searchText, setIsLoading, setGenerationError, setGenerationProgress, setAiGeneratedName, setAiGeneratedModel, setSelectedJewelry]); // Add all dependencies
+  };
   
   // Sample jewelry items
   const jewelryItems: JewelryItem[] = [
@@ -527,40 +530,32 @@ export default function CustomizerPage() {
   
   // Function to load a model when selectedJewelry changes
   useEffect(() => {
-    if (!selectedJewelry || !sceneRef.current) return
-    
-    // Remove existing model
-    cleanupObject(modelRef.current)
-    
-    // Check if we have an AI-generated model
-    const isAIGenerated = selectedJewelry.name.startsWith('AI Design:');
-    
-    if (isAIGenerated && selectedJewelry.stlPath) {
+    if (selectedJewelry) {
       setIsLoading(true)
       
-      // Always convert Tripo GLB models to STL first
-      if (selectedJewelry.stlPath.includes('tripo-data.rg1.data.tripo3d.com') || 
-          selectedJewelry.stlPath.includes('mesh.glb')) {
-        console.log("Detected Tripo model URL, converting to STL:", selectedJewelry.stlPath);
-        convertAndLoadSTL(selectedJewelry.stlPath);
-      } else {
-        // For other file types, proceed with normal loading
-        const fileExtension = selectedJewelry.stlPath.split('.').pop()?.toLowerCase();
-        
-        if (fileExtension === 'stl') {
-          loadSTLModel(selectedJewelry.stlPath);
-        } else if (fileExtension === 'glb' || fileExtension === 'gltf') {
-          loadGLTFModel(selectedJewelry.stlPath);
+      if (selectedJewelry.stlPath === aiGeneratedModel) {
+        if (generatedStlUrl) {
+          // This is an AI model with a base model URL
+          loadSTLModel(generatedStlUrl)
         } else {
-          console.warn(`Unknown file extension: ${fileExtension}, using placeholder model`);
-          createPlaceholderModel(true);
+          // No model yet, create placeholder
+          createPlaceholderModel(true)
         }
+      } else if (selectedJewelry.stlPath.endsWith('.stl')) {
+        // Load STL file
+        loadSTLModel(selectedJewelry.stlPath)
+      } else if (selectedJewelry.stlPath.endsWith('.gltf') || selectedJewelry.stlPath.endsWith('.glb')) {
+        // Load GLTF file
+        loadGLTFModel(selectedJewelry.stlPath)
+      } else {
+        // Create a placeholder for regular products
+        createPlaceholderModel(false)
       }
     } else {
-      // For catalog items without proper paths, create placeholder
-      createPlaceholderModel(false);
+      // No jewelry selected, create simple placeholder
+      createPlaceholderModel(false)
     }
-  }, [selectedJewelry, selectedMaterial, selectedSize, aiGeneratedModel]);
+  }, [selectedJewelry, aiGeneratedModel, generatedStlUrl, selectedMaterial, selectedSize, showBaseShape])
   
   // Convert remote model to STL and load it
   const convertAndLoadSTL = async (modelUrl: string) => {
@@ -1037,6 +1032,11 @@ export default function CustomizerPage() {
       return
     }
     
+    // Clean up existing model
+    if (modelRef.current && sceneRef.current) {
+      cleanupObject(modelRef.current)
+    }
+    
     // Create more detailed placeholder geometry based on the jewelry type
     let geometry: THREE.BufferGeometry
     
@@ -1047,6 +1047,18 @@ export default function CustomizerPage() {
       
       // Let's create a fancy geometry for AI models when we don't have the actual model
       const randomSeed = selectedJewelry.id % 5; // Use the ID to get consistent but different shapes
+      
+      // Skip base shape creation if showBaseShape is false
+      if (!showBaseShape) {
+        // Create a minimal representation or an empty group
+        const emptyGroup = new THREE.Group();
+        if (sceneRef.current) {
+          sceneRef.current.add(emptyGroup);
+          modelRef.current = emptyGroup as unknown as THREE.Mesh;
+          setIsLoading(false);
+        }
+        return;
+      }
       
       switch (randomSeed) {
         case 0:
@@ -1116,6 +1128,18 @@ export default function CustomizerPage() {
           geometry = new THREE.OctahedronGeometry(2, 1);
       }
     } else {
+      // Skip base shape creation if showBaseShape is false
+      if (!showBaseShape) {
+        // Create a minimal representation or an empty group
+        const emptyGroup = new THREE.Group();
+        if (sceneRef.current) {
+          sceneRef.current.add(emptyGroup);
+          modelRef.current = emptyGroup as unknown as THREE.Mesh;
+          setIsLoading(false);
+        }
+        return;
+      }
+      
       // For catalog items, use the existing logic based on jewelry type
       switch (selectedJewelry.type) {
         case "ring":
@@ -1362,7 +1386,7 @@ export default function CustomizerPage() {
         }
         
         // Trigger AI generation with explicit prompt from URL
-        handleAIClick(promptFromURL);
+        handleAIClick();
       }, 500);
       
       return () => clearTimeout(timer);
@@ -1519,7 +1543,7 @@ export default function CustomizerPage() {
         <div className="w-24"></div>
       </div>
       
-      {/* Search */}
+      {/* Search and Generation Section */}
       <div className="w-full max-w-xl mb-8 mx-auto relative">
         <div 
           ref={dropAreaRef}
@@ -1674,134 +1698,8 @@ export default function CustomizerPage() {
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 mb-8">
-        {/* 3D Viewer with Controls */}
-        <div className="relative lg:col-span-2">
-          <div 
-            ref={canvasRef} 
-            className="w-full aspect-square bg-gray-50 rounded-lg shadow-inner overflow-hidden relative"
-          >
-            {/* Updated loading indicator with progress */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 z-10 transition-opacity duration-500" 
-                 style={{opacity: isLoading || !selectedJewelry ? 1 : 0, pointerEvents: isLoading || !selectedJewelry ? 'auto' : 'none'}}>
-              <div className="w-16 h-16 relative mb-3">
-                <div className="w-16 h-16 border-4 border-gray-200 rounded-full"></div>
-                {isLoading && (
-                  <div 
-                    className="absolute top-0 left-0 w-16 h-16 border-4 border-purple-500 rounded-full"
-                    style={{ 
-                      clipPath: `polygon(50% 50%, 50% 0%, ${50 + 50 * Math.sin(generationProgress * 0.02 * Math.PI)}% ${50 - 50 * Math.cos(generationProgress * 0.02 * Math.PI)}%, 50% 50%)`,
-                      transform: 'rotate(-90deg)'
-                    }}
-                  ></div>
-                )}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  {isLoading ? (
-                    <div className="h-6 w-6 border-2 border-gray-300 border-t-purple-600 rounded-full animate-spin"></div>
-                  ) : !selectedJewelry ? (
-                    <Search className="h-6 w-6 text-gray-400" />
-                  ) : (
-                    <span className="text-sm font-medium text-gray-600">Ready</span>
-                  )}
-                </div>
-              </div>
-              <span className="text-gray-500 text-sm">
-                {isLoading && aiGeneratedName 
-                  ? `Generating "${aiGeneratedName}"... ${generationProgress}%` 
-                  : isLoading 
-                    ? 'Loading 3D model...'
-                    : !selectedJewelry 
-                      ? 'Search for jewelry or use AI to generate'
-                      : 'Loading 3D model...'}
-              </span>
-            </div>
-          </div>
-          
-          {/* Rotation Controls - Moved to side and repositioned to prevent overlap */}
-          <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm rounded-lg p-2 shadow-md flex flex-col space-y-2 z-20">
-            <div className="flex justify-center">
-              <button 
-                onClick={handleRotateUp}
-                className="p-2 hover:bg-gray-100 rounded transition-colors"
-                title="Rotate Up"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m18 15-6-6-6 6"/>
-                </svg>
-              </button>
-            </div>
-            <div className="flex justify-between">
-              <button 
-                onClick={handleRotateLeft}
-                className="p-2 hover:bg-gray-100 rounded transition-colors"
-                title="Rotate Left"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m15 18-6-6 6-6"/>
-                </svg>
-              </button>
-              <button 
-                onClick={handleReset}
-                className="p-2 hover:bg-gray-100 rounded transition-colors"
-                title="Reset View"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 2v6h6"></path>
-                  <path d="M21 12A9 9 0 0 0 3.86 8.14"></path>
-                  <path d="M21 22v-6h-6"></path>
-                  <path d="M3 12a9 9 0 0 0 17.14 3.86"></path>
-                </svg>
-              </button>
-              <button 
-                onClick={handleRotateRight}
-                className="p-2 hover:bg-gray-100 rounded transition-colors"
-                title="Rotate Right"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m9 18 6-6-6-6"/>
-                </svg>
-              </button>
-            </div>
-            <div className="flex justify-center">
-              <button 
-                onClick={handleRotateDown}
-                className="p-2 hover:bg-gray-100 rounded transition-colors"
-                title="Rotate Down"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m6 9 6 6 6-6"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-          
-          {/* Mouse Controls Help - Moved to bottom-right to prevent overlap */}
-          <div className="absolute bottom-4 left-4 text-xs text-gray-500 bg-white/80 backdrop-blur-sm p-2 rounded-lg shadow-sm">
-            <div className="flex flex-col space-y-1">
-              <div className="flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
-                  <path d="M12 5v14M18 13l-6 6-6-6"/>
-                </svg>
-                <span>Drag: Rotate</span>
-              </div>
-              <div className="flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
-                  <circle cx="12" cy="12" r="10"/>
-                  <path d="M8 12h8"/>
-                </svg>
-                <span>Scroll: Zoom</span>
-              </div>
-              <div className="flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
-                  <path d="M15 3h6v6M14 10l6.1-6.1M9 21H3v-6M10 14l-6.1 6.1"/>
-                </svg>
-                <span>Click: Toggle Auto-Rotate</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        
         {/* Product Configurator */}
-        <div className="flex flex-col justify-between lg:col-span-3">
+        <div className="flex flex-col justify-between lg:col-span-2">
           {selectedJewelry ? (
             <>
               <div>
@@ -1887,6 +1785,26 @@ export default function CustomizerPage() {
                     </button>
                   </div>
                 </div>
+                
+                {/* Developer Options - Only show when a jewelry item is selected */}
+                {selectedJewelry && (
+                  <div className="mb-8">
+                    <label className="text-sm text-gray-500 block mb-2">Developer Options</label>
+                    <div className="flex items-center">
+                      <button 
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${showBaseShape ? 'bg-gray-900' : 'bg-gray-200'}`}
+                        onClick={() => setShowBaseShape(!showBaseShape)}
+                        aria-pressed={showBaseShape}
+                        type="button"
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${showBaseShape ? 'translate-x-6' : 'translate-x-1'}`}
+                        />
+                      </button>
+                      <span className="ml-2 text-sm text-gray-700">Show Base Shape</span>
+                    </div>
+                  </div>
+                )}
               </div>
               
               {/* Highlight AI-generated content */}
@@ -1928,6 +1846,31 @@ export default function CustomizerPage() {
               >
                 Start Searching
               </button>
+            </div>
+          )}
+        </div>
+        
+        {/* 3D Viewer */}
+        <div className="lg:col-span-3">
+          <h2 className="text-lg font-medium mb-4">3D Preview</h2>
+          
+          {/* Showing loading state or not selected state */}
+          {isLoading ? (
+            <div className="bg-blue-50 border border-blue-200 text-blue-600 p-4 rounded-md text-center min-h-[400px] flex flex-col items-center justify-center">
+              <div className="h-8 w-8 border-4 border-blue-300 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+              <p>Generating "{aiGeneratedName}"... {generationProgress}%</p>
+            </div>
+          ) : !selectedJewelry ? (
+            <div className="bg-gray-50 border border-gray-200 text-gray-500 p-4 rounded-md text-center min-h-[400px] flex flex-col items-center justify-center">
+              <Search className="h-8 w-8 text-gray-300 mb-4" />
+              <p>Search for jewelry or generate with AI to preview in 3D</p>
+            </div>
+          ) : (
+            <div className="relative min-h-[500px] border border-gray-200 rounded-lg overflow-hidden">
+              <JewelryViewer 
+                stlUrl={selectedJewelry.stlPath === aiGeneratedModel && generatedStlUrl ? generatedStlUrl : selectedJewelry.stlPath}
+                readOnly={false}
+              />
             </div>
           )}
         </div>
