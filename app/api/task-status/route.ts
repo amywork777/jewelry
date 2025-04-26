@@ -137,8 +137,8 @@ async function handleTaskStatus(request: NextRequest) {
     // console.log(`🔍 [task-status] Task status: ${taskData.status}, progress: ${taskData.progress || 0}%`);
     
     // Extract model URLs for completed tasks
-    let finalModelUrl = null;
-    let baseModelUrl = null;
+    let finalModelUrl: string | null = null;
+    let baseModelUrl: string | null = null;
     
     if (taskData.status === "success" && taskData.output) {
       // Store both URLs 
@@ -152,6 +152,35 @@ async function handleTaskStatus(request: NextRequest) {
       if (!finalModelUrl && baseModelUrl) {
         // console.log(`✅ [task-status] Using base_model URL for model display: ${baseModelUrl}`);
         finalModelUrl = baseModelUrl;
+      }
+      
+      // If we still don't have a model URL but have renderedImage, try to construct model URL
+      if (!finalModelUrl && taskData.output?.rendered_image) {
+        const renderedImage = taskData.output.rendered_image;
+        // console.log(`🔍 [task-status] No model URL, but renderedImage is available: ${renderedImage}`);
+        try {
+          // Extract model URL from rendered image URL pattern
+          // Example: If renderedImage is at path/to/taskId/legacy.webp
+          // Then model might be at path/to/taskId/mesh.glb
+          
+          // First, get the base URL without the image filename and query parameters
+          const imageUrl = new URL(renderedImage);
+          const pathname = imageUrl.pathname;
+          const directoryPath = pathname.substring(0, pathname.lastIndexOf('/') + 1);
+          
+          // Construct potential model URL paths - try STL first, then GLB as fallback
+          const potentialSTLUrl = `${imageUrl.protocol}//${imageUrl.host}${directoryPath}mesh.stl${imageUrl.search}`;
+          const potentialGLBUrl = `${imageUrl.protocol}//${imageUrl.host}${directoryPath}mesh.glb${imageUrl.search}`;
+          
+          // Prefer STL over GLB
+          // console.log(`✅ [task-status] Trying to use STL model URL: ${potentialSTLUrl}`);
+          const potentialModelUrl = potentialSTLUrl;
+          
+          // console.log(`✅ [task-status] Constructed potential model URL: ${potentialModelUrl}`);
+          finalModelUrl = potentialModelUrl;
+        } catch (e) {
+          // console.error(`❌ [task-status] Error constructing model URL from renderedImage:`, e);
+        }
       }
       
       if (!finalModelUrl && !baseModelUrl) {

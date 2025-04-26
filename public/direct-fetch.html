@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Direct Model Viewer</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    
+    #container {
+      width: 100%;
+      height: 100%;
+      background-color: #f0f0f0;
+    }
+    
+    model-viewer {
+      width: 100%;
+      height: 100%;
+    }
+    
+    #loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background-color: rgba(0,0,0,0.5);
+      color: white;
+      z-index: 1000;
+    }
+    
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: #06b6d4;
+      animation: spin 1s linear infinite;
+      margin-bottom: 1rem;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    #controls {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      z-index: 100;
+    }
+    
+    button {
+      padding: 0.5rem 1rem;
+      background-color: #4b5563;
+      color: white;
+      border: none;
+      border-radius: 0.25rem;
+      cursor: pointer;
+    }
+    
+    button:hover {
+      background-color: #6b7280;
+    }
+    
+    #error {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background-color: rgba(255,255,255,0.9);
+      color: #e11d48;
+      z-index: 1000;
+      padding: 2rem;
+      text-align: center;
+    }
+    
+    #fallbackView {
+      display: none;
+      width: 100%;
+      height: 100%;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+    
+    #fallbackImage {
+      max-width: 90%;
+      max-height: 90%;
+      object-fit: contain;
+    }
+  </style>
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.3.0/model-viewer.min.js"></script>
+  <script src="/model-fetcher.js"></script>
+</head>
+<body>
+  <div id="loading">
+    <div class="spinner"></div>
+    <div id="loadingText">Loading model...</div>
+  </div>
+  
+  <div id="error">
+    <h3>Error Loading Model</h3>
+    <p id="errorMessage">There was a problem loading the 3D model.</p>
+    <button id="retryButton">Try Again</button>
+  </div>
+  
+  <div id="fallbackView">
+    <img id="fallbackImage" src="" alt="2D Render">
+    <p>3D model couldn't be loaded - showing image render instead</p>
+  </div>
+  
+  <div id="container">
+    <model-viewer
+      id="viewer"
+      camera-controls
+      auto-rotate
+      shadow-intensity="1"
+      shadow-softness="0.5"
+      exposure="0.8"
+      ar
+      ar-modes="webxr scene-viewer"
+      orientation="0 0 0"
+      environment-image="neutral"
+      crossorigin="anonymous"
+    ></model-viewer>
+  </div>
+  
+  <div id="controls">
+    <button id="toggleRotate">Pause Rotation</button>
+    <button id="resetCamera">Reset Camera</button>
+    <button id="tryStl">Try STL</button>
+    <button id="tryGlb">Try GLB</button>
+    <button id="tryImage">Try Image</button>
+  </div>
+  
+  <script>
+    // Parse URL params to get model URL
+    const params = new URLSearchParams(window.location.search);
+    let modelUrl = params.get('url');
+    let rotationPaused = false;
+    
+    // Get DOM elements
+    const viewer = document.getElementById('viewer');
+    const loading = document.getElementById('loading');
+    const loadingText = document.getElementById('loadingText');
+    const error = document.getElementById('error');
+    const errorMessage = document.getElementById('errorMessage');
+    const retryButton = document.getElementById('retryButton');
+    const toggleRotate = document.getElementById('toggleRotate');
+    const resetCamera = document.getElementById('resetCamera');
+    const tryStl = document.getElementById('tryStl');
+    const tryGlb = document.getElementById('tryGlb');
+    const tryImage = document.getElementById('tryImage');
+    const fallbackView = document.getElementById('fallbackView');
+    const fallbackImage = document.getElementById('fallbackImage');
+    
+    // Toggle autorotate when the button is clicked
+    toggleRotate.addEventListener('click', () => {
+      rotationPaused = !rotationPaused;
+      viewer.autoRotate = !rotationPaused;
+      toggleRotate.textContent = rotationPaused ? 'Resume Rotation' : 'Pause Rotation';
+    });
+    
+    // Reset camera to default position
+    resetCamera.addEventListener('click', () => {
+      viewer.cameraOrbit = 'auto auto auto';
+      viewer.cameraTarget = 'auto auto auto';
+      viewer.fieldOfView = 'auto';
+    });
+    
+    // Try different model formats
+    tryStl.addEventListener('click', () => {
+      if (modelUrl) {
+        // Convert to STL if not already
+        if (!modelUrl.endsWith('.stl')) {
+          const newUrl = modelUrl.replace('.glb', '.stl').replace('.gltf', '.stl');
+          loadModel(newUrl);
+        } else {
+          alert('Already using STL format');
+        }
+      }
+    });
+    
+    tryGlb.addEventListener('click', () => {
+      if (modelUrl) {
+        // Convert to GLB if not already
+        if (!modelUrl.endsWith('.glb')) {
+          const newUrl = modelUrl.replace('.stl', '.glb').replace('.gltf', '.glb');
+          loadModel(newUrl);
+        } else {
+          alert('Already using GLB format');
+        }
+      }
+    });
+    
+    tryImage.addEventListener('click', () => {
+      if (modelUrl) {
+        // For Tripo URLs, extract the taskId for direct image access
+        if (modelUrl.includes('tripo')) {
+          const taskIdMatch = modelUrl.match(/\/([^\/]+)\/mesh\.(glb|stl)/);
+          if (taskIdMatch && taskIdMatch[1]) {
+            const taskId = taskIdMatch[1];
+            console.log('Try Image: Using direct tripo-image endpoint with taskId:', taskId);
+            tryFallbackToTripoImage(taskId);
+            return;
+          }
+        }
+        
+        // Otherwise use the standard image fallback approach
+        tryLoadImage();
+      }
+    });
+    
+    // Retry button event listener
+    retryButton.addEventListener('click', () => {
+      error.style.display = 'none';
+      loading.style.display = 'flex';
+      loadModel(modelUrl);
+    });
+    
+    // Handle model load success
+    viewer.addEventListener('load', () => {
+      console.log('Model loaded successfully!');
+      loading.style.display = 'none';
+      fallbackView.style.display = 'none';
+      error.style.display = 'none';
+    });
+    
+    // Handle model load error
+    viewer.addEventListener('error', (event) => {
+      console.error('Model loading error:', event);
+      errorMessage.textContent = 'Failed to load 3D model. Try a different format or view the 2D render.';
+      error.style.display = 'flex';
+      loading.style.display = 'none';
+      
+      // Try to load image fallback automatically
+      tryLoadImage();
+    });
+    
+    // Function to try loading the image fallback
+    async function tryLoadImage() {
+      try {
+        // Extract the base URL and try to get the webp render
+        let imageUrl = modelUrl;
+        if (imageUrl.includes('mesh.glb')) {
+          imageUrl = imageUrl.replace('mesh.glb', 'legacy.webp');
+        } else if (imageUrl.includes('mesh.stl')) {
+          imageUrl = imageUrl.replace('mesh.stl', 'legacy.webp');
+        }
+        
+        loadingText.textContent = 'Loading 2D render...';
+        loading.style.display = 'flex';
+        
+        // Use a proxy to avoid CORS issues
+        const proxyImageUrl = `/api/model-proxy?url=${encodeURIComponent(imageUrl)}&forceImageRedirect=true`;
+        
+        // Test if the image exists first
+        try {
+          const response = await fetch(proxyImageUrl);
+          if (response.ok && response.headers.get('Content-Type')?.includes('image')) {
+            console.log('Image found, loading as fallback');
+            fallbackImage.src = proxyImageUrl;
+            fallbackView.style.display = 'flex';
+            error.style.display = 'none';
+            loading.style.display = 'none';
+            return;
+          }
+          console.warn('Image not found via model-proxy, trying tripo-image API...');
+        } catch (proxyError) {
+          console.warn('Error with model-proxy fallback:', proxyError);
+        }
+        
+        // Try the specialized tripo-image endpoint as a last resort
+        if (modelUrl.includes('tripo')) {
+          try {
+            // Extract taskId from the Tripo URL
+            let taskId = '';
+            
+            // Extract from URL patterns like: https://.../{taskId}/mesh.glb or /{taskId}/mesh.stl
+            const taskIdMatch = modelUrl.match(/\/([^\/]+)\/mesh\.(glb|stl)/);
+            if (taskIdMatch && taskIdMatch[1]) {
+              taskId = taskIdMatch[1];
+              console.log('Extracted taskId from URL:', taskId);
+              
+              // Use the specialized tripo-image API
+              const tripoImageUrl = `/api/tripo-image?taskId=${encodeURIComponent(taskId)}`;
+              
+              console.log('Trying specialized tripo-image API:', tripoImageUrl);
+              
+              // Test if the image exists
+              const tripoResponse = await fetch(tripoImageUrl);
+              if (tripoResponse.ok && tripoResponse.headers.get('Content-Type')?.includes('image')) {
+                console.log('Image found via tripo-image API, using as fallback');
+                fallbackImage.src = tripoImageUrl;
+                fallbackView.style.display = 'flex';
+                error.style.display = 'none';
+                loading.style.display = 'none';
+                return;
+              }
+            } else {
+              console.warn('Could not extract taskId from URL:', modelUrl);
+            }
+          } catch (tripoError) {
+            console.error('Error with tripo-image fallback:', tripoError);
+          }
+        }
+        
+        // If we get here, no image fallback was successful
+        console.error('No image fallback available');
+        error.style.display = 'flex';
+        loading.style.display = 'none';
+      } catch (err) {
+        console.error('Error loading image fallback:', err);
+        error.style.display = 'flex';
+        loading.style.display = 'none';
+      }
+    }
+    
+    // Main function to load the model using our enhanced fetcher
+    async function loadModel(url) {
+      if (!url) {
+        errorMessage.textContent = 'No model URL provided';
+        error.style.display = 'flex';
+        loading.style.display = 'none';
+        return;
+      }
+      
+      modelUrl = url; // Update the global URL
+      console.log('Loading model:', url);
+      loading.style.display = 'flex';
+      error.style.display = 'none';
+      
+      try {
+        // Check if we should try STL first for Tripo models
+        let urlToUse = url;
+        if (urlToUse.includes('tripo') && urlToUse.includes('mesh.glb')) {
+          console.log('Converting GLB to STL for Tripo URL');
+          urlToUse = urlToUse.replace('mesh.glb', 'mesh.stl');
+        }
+        
+        // For Tripo URLs, extract the taskId for potential fallback
+        let taskId = '';
+        if (url.includes('tripo')) {
+          const taskIdMatch = url.match(/\/([^\/]+)\/mesh\.(glb|stl)/);
+          if (taskIdMatch && taskIdMatch[1]) {
+            taskId = taskIdMatch[1];
+            console.log('Extracted taskId for potential fallback:', taskId);
+          }
+        }
+        
+        // Try to use our enhanced fetcher first
+        if (window.fetchModel) {
+          try {
+            loadingText.textContent = 'Fetching model with enhanced loader...';
+            
+            // Use our proxy approach for Tripo URLs
+            const proxyUrl = `/api/model-proxy?url=${encodeURIComponent(urlToUse)}`;
+            
+            // Set the model source directly to the proxy URL
+            viewer.src = proxyUrl;
+            
+            // We'll let the load/error events handle the rest
+            return;
+          } catch (fetcherError) {
+            console.error('Enhanced fetcher failed:', fetcherError);
+            // Fall back to direct loading
+          }
+        }
+        
+        // Direct loading approach with multiple strategies
+        loadingText.textContent = 'Loading with direct approach...';
+        
+        // For Tripo URLs, a special strategy
+        if (url.includes('tripo')) {
+          try {
+            // For maximum compatibility, try both formats with the proxy
+            if (urlToUse.endsWith('.stl')) {
+              console.log('Trying STL format with proxy');
+              const proxyUrl = `/api/model-proxy?url=${encodeURIComponent(urlToUse)}`;
+              viewer.src = proxyUrl;
+            } else if (urlToUse.endsWith('.glb')) {
+              console.log('Trying GLB format with proxy');
+              const proxyUrl = `/api/model-proxy?url=${encodeURIComponent(urlToUse)}`;
+              viewer.src = proxyUrl;
+            } else {
+              // Generic approach for other file types
+              const proxyUrl = `/api/model-proxy?url=${encodeURIComponent(urlToUse)}`;
+              viewer.src = proxyUrl;
+            }
+            return;
+          } catch (tripoError) {
+            console.error('Error with Tripo proxy approach:', tripoError);
+            
+            // If we have a taskId, try immediate image fallback
+            if (taskId) {
+              console.log('Attempting immediate fallback to image using taskId');
+              tryFallbackToTripoImage(taskId);
+            } else {
+              // Last resort - try the image fallback
+              tryLoadImage();
+            }
+          }
+        } else {
+          // For non-Tripo URLs, use standard proxy approach
+          const proxyUrl = `/api/model-proxy?url=${encodeURIComponent(urlToUse)}`;
+          viewer.src = proxyUrl;
+        }
+      } catch (error) {
+        console.error('Error loading model:', error);
+        errorMessage.textContent = `Error: ${error.message}`;
+        loading.style.display = 'none';
+        error.style.display = 'flex';
+        
+        // Try image fallback as last resort
+        tryLoadImage();
+      }
+    }
+    
+    // Helper function to directly try the tripo-image endpoint
+    async function tryFallbackToTripoImage(taskId) {
+      if (!taskId) return false;
+      
+      try {
+        console.log('Trying direct tripo-image fallback for taskId:', taskId);
+        const tripoImageUrl = `/api/tripo-image?taskId=${encodeURIComponent(taskId)}`;
+        
+        // Test if the image exists
+        const tripoResponse = await fetch(tripoImageUrl);
+        if (tripoResponse.ok && tripoResponse.headers.get('Content-Type')?.includes('image')) {
+          console.log('Image found via tripo-image API, using as fallback');
+          fallbackImage.src = tripoImageUrl;
+          fallbackView.style.display = 'flex';
+          error.style.display = 'none';
+          loading.style.display = 'none';
+          return true;
+        }
+      } catch (tripoError) {
+        console.error('Error with direct tripo-image fallback:', tripoError);
+      }
+      
+      return false;
+    }
+    
+    // Start loading when the page is ready
+    document.addEventListener('DOMContentLoaded', () => {
+      if (modelUrl) {
+        loadModel(modelUrl);
+      } else {
+        errorMessage.textContent = 'No model URL provided';
+        error.style.display = 'flex';
+        loading.style.display = 'none';
+      }
+    });
+  </script>
+</body>
+</html>

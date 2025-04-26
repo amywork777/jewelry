@@ -292,42 +292,42 @@ export default function CustomizerPage() {
     {
       id: 1,
       type: "ring",
-      name: "Classic Diamond Ring",
-      stlPath: "/models/ring.stl", // These would be real paths in a production app
+      name: "Slotted Disk Ring",
+      stlPath: "/models/ring.stl",
       price: 799.99,
-      description: "Elegant diamond ring with a timeless design"
+      description: "Unique slotted disk design with a modern aesthetic"
     },
     {
       id: 2,
       type: "necklace",
       name: "Pearl Pendant Necklace",
-      stlPath: "/models/necklace.stl",
+      stlPath: "/models/pendant.stl", // Using pendant model for necklace since we don't have a necklace model
       price: 549.99,
-      description: "Beautiful pearl pendant on a delicate chain"
+      description: "Beautiful pendant on a delicate chain"
     },
     {
       id: 3,
       type: "earrings",
-      name: "Sapphire Stud Earrings",
+      name: "Geometric Stud Earrings",
       stlPath: "/models/earrings.stl",
       price: 399.99,
-      description: "Stunning sapphire studs for everyday elegance"
+      description: "Stunning geometric studs for everyday elegance"
     },
     {
       id: 4,
       type: "bracelet",
-      name: "Tennis Bracelet",
-      stlPath: "/models/bracelet.stl",
+      name: "Sculptural Bracelet",
+      stlPath: "/models/ring.stl", // Using ring model for bracelet since we don't have a bracelet model
       price: 1299.99,
-      description: "Sparkling tennis bracelet with premium diamonds"
+      description: "Unique sculptural bracelet with a modern design"
     },
     {
       id: 5,
       type: "pendant",
-      name: "Heart Locket",
+      name: "Modern Pendant",
       stlPath: "/models/pendant.stl",
       price: 349.99,
-      description: "Heart-shaped locket for your precious memories"
+      description: "Contemporary pendant design with a geometric shape"
     }
   ]
   
@@ -562,24 +562,59 @@ export default function CustomizerPage() {
     }
   }, [selectedJewelry, selectedMaterial, selectedSize, aiGeneratedModel]);
   
-  // Convert remote model to STL and load it
+  // Convert and load models (handles both GLB and STL formats)
   const convertAndLoadSTL = async (modelUrl: string) => {
     try {
-      // If it's already an STL file, load it directly
-      if (modelUrl.endsWith('.stl')) {
-        console.log('Loading STL model directly:', modelUrl);
-        await loadSTLModel(modelUrl);
-        return;
-      }
-
-      console.log('Converting model to STL:', modelUrl);
+      console.log('Loading 3D model from:', modelUrl);
       
-      // Extract the task ID from the URL if possible (UUID format)
+      // Extract the file extension
+      const fileExtension = modelUrl.toLowerCase().split('.').pop();
+      
+      // Extract the task ID from the URL with support for multiple formats
       let taskId: string | null = null;
-      const taskIdMatch = modelUrl.match(/\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\//i);
-      if (taskIdMatch && taskIdMatch[1]) {
-        taskId = taskIdMatch[1];
-        console.log('Extracted task ID from URL:', taskId);
+      
+      // Try UUID format first
+      const uuidMatch = modelUrl.match(/\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\//i);
+      if (uuidMatch && uuidMatch[1]) {
+        taskId = uuidMatch[1];
+        console.log('Extracted UUID task ID from URL:', taskId);
+      }
+      
+      // Try Tripo pattern (looking for taskId in mesh.glb or mesh.stl URLs)
+      if (!taskId && (modelUrl.includes('/mesh.glb') || modelUrl.includes('/mesh.stl'))) {
+        const tripoTaskMatch = modelUrl.match(/\/([^\/]+)\/mesh\.(glb|stl)/i);
+        if (tripoTaskMatch && tripoTaskMatch[1]) {
+          taskId = tripoTaskMatch[1];
+          console.log('Extracted Tripo task ID from URL:', taskId);
+        }
+      }
+      
+      // For Tripo URLs with taskId, try the specialized tripo-image endpoint first
+      // This is often more reliable than trying to load the 3D model
+      if (taskId && modelUrl.includes('tripo')) {
+        try {
+          console.log('Detected Tripo URL with taskId, trying specialized tripo-image endpoint first');
+          const tripoImageUrl = `/api/tripo-image?taskId=${encodeURIComponent(taskId)}`;
+          
+          // Check if the image exists
+          const checkResponse = await fetch(tripoImageUrl, { method: 'HEAD' });
+          if (checkResponse.ok) {
+            console.log('tripo-image available - trying it first before 3D model load attempts');
+            const success = await createImagePlane(tripoImageUrl);
+            if (success) {
+              toast({
+                title: "Model Preview",
+                description: "Showing a 2D render of the model for better reliability. You can still try the 3D version with the button below.",
+                duration: 5000,
+              });
+              setIsLoading(false);
+              return;
+            }
+          }
+        } catch (tripoImageError) {
+          console.error('Failed initial tripo-image check:', tripoImageError);
+          // Continue with 3D loading attempts
+        }
       }
       
       // Use our proxy endpoint to avoid CORS issues - but only once
@@ -590,27 +625,138 @@ export default function CustomizerPage() {
         modelUrl : // Use as is if already proxied
         `/api/model-proxy?url=${encodeURIComponent(modelUrl)}${taskId ? `&taskId=${taskId}` : ''}`;
       
-      try {
-        // First try loading directly with STL loader
-        console.log('Attempting to load with STL loader:', proxyUrl);
-        await loadSTLModel(proxyUrl);
-        return;
-      } catch (stlError) {
-        console.error('Failed to load as STL:', stlError);
-        
-        // If STL loading fails, try GLB/GLTF loader
-        try {
-          console.log('Attempting to load with GLTF loader');
-          await loadGLTFModel(proxyUrl);
+      // Check for image fallbacks before trying 3D formats
+      if (modelUrl.includes('webp') || modelUrl.includes('jpg') || modelUrl.includes('png')) {
+        console.log('Detected image URL, creating image plane');
+        const success = await createImagePlane(modelUrl);
+        if (success) {
+          setIsLoading(false);
           return;
-        } catch (glbError) {
-          console.error('Failed to load as GLB/GLTF:', glbError);
         }
       }
       
-      // If model loading failed, try to get an image instead
+      // Try the appropriate loader based on the file extension
+      if (fileExtension === 'stl') {
+        console.log('Loading STL model directly');
+        try {
+          await loadSTLModel(modelUrl);
+          return;
+        } catch (stlError) {
+          console.error('Error loading STL:', stlError);
+          // Continue to fallbacks
+        }
+      } else if (fileExtension === 'glb' || fileExtension === 'gltf') {
+        console.log('Loading GLB/GLTF model directly');
+        try {
+          await loadGLTFModel(modelUrl);
+          return;
+        } catch (glbError) {
+          console.error('Error loading GLB/GLTF:', glbError);
+          // Continue to fallbacks
+        }
+      }
+      
+      // Instead of trying multiple loaders, use direct-fetch.html viewer which has more robust loading
+      console.log('Using direct-fetch approach for more reliable loading');
+      
+      // Open the direct-fetch viewer in an iframe
       try {
-        console.log('All 3D loading failed, checking for rendered image');
+        const directFetchUrl = `/direct-fetch.html?url=${encodeURIComponent(modelUrl)}`;
+        console.log('Opening model in direct-fetch viewer:', directFetchUrl);
+        
+        // Show the direct fetch viewer in an iframe
+        const iframe = document.createElement('iframe');
+        iframe.src = directFetchUrl;
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.border = 'none';
+        
+        // Clear current scene
+        if (sceneRef.current) {
+          while (sceneRef.current.children.length) {
+            const object = sceneRef.current.children[0];
+            sceneRef.current.remove(object);
+          }
+        }
+        
+        // Add iframe to the canvas container
+        if (canvasRef.current) {
+          // Clear any existing content
+          while (canvasRef.current.firstChild) {
+            canvasRef.current.removeChild(canvasRef.current.firstChild);
+          }
+          
+          // Add the iframe
+          canvasRef.current.appendChild(iframe);
+        }
+        
+        // Hide loading indicator
+        setIsLoading(false);
+        
+        return;
+      } catch (directFetchError) {
+        console.error('Failed to use direct-fetch approach:', directFetchError);
+        
+        // Fall back to traditional loaders
+        console.log('Falling back to traditional loaders');
+        
+        // First try loading with STL loader (preferred format)
+        try {
+          console.log('Attempting to load with STL loader first (preferred format)');
+          // Force the URL to be STL version if it's GLB
+          const stlUrl = proxyUrl.includes('mesh.glb') ? 
+            proxyUrl.replace('mesh.glb', 'mesh.stl') : proxyUrl;
+          
+          await loadSTLModel(stlUrl);
+          return;
+        } catch (stlError) {
+          console.error('Failed to load as STL:', stlError);
+          
+          // If STL loading fails, try GLTF/GLB loader as fallback
+          try {
+            console.log('Falling back to GLTF/GLB loader');
+            // Make sure we're using the GLB version with a flag to not redirect to STL
+            const glbUrl = proxyUrl.includes('mesh.stl') ? 
+              proxyUrl.replace('mesh.stl', 'mesh.glb') : 
+              (proxyUrl.includes('mesh.glb') ? 
+                proxyUrl + '&forceGLB=true' : proxyUrl);
+            
+            await loadGLTFModel(glbUrl);
+            return;
+          } catch (glbError) {
+            console.error('Failed to load as GLB/GLTF:', glbError);
+          }
+        }
+      }
+      
+      // Try image fallbacks with specialized tripo-image endpoint first
+      if (taskId && modelUrl.includes('tripo')) {
+        try {
+          console.log('3D model loading failed, trying tripo-image API as fallback');
+          const tripoImageUrl = `/api/tripo-image?taskId=${encodeURIComponent(taskId)}`;
+          
+          const imageResponse = await fetch(tripoImageUrl, { method: 'HEAD' });
+          if (imageResponse.ok) {
+            console.log('tripo-image endpoint available as fallback');
+            const success = await createImagePlane(tripoImageUrl);
+            if (success) {
+              toast({
+                title: "3D Model Preview",
+                description: "We're showing a 2D preview instead of a 3D model.",
+                duration: 5000,
+              });
+              setIsLoading(false);
+              return;
+            }
+          }
+        } catch (tripoImageError) {
+          console.error('Failed to use tripo-image fallback:', tripoImageError);
+        }
+      }
+      
+      // If model loading failed, try to get an image from task status
+      try {
+        console.log('All 3D loading and tripo-image attempts failed, checking task-status for rendered image');
         const taskApiEndpoint = taskId ? 
           `/api/task-status?taskId=${taskId}` : 
           `/api/tripo`;
@@ -621,7 +767,7 @@ export default function CustomizerPage() {
           const taskData = await taskResponse.json();
           
           if (taskData.renderedImage) {
-            console.log('Using rendered image as fallback');
+            console.log('Using rendered image from task-status as fallback');
             // Pass forceImageRedirect flag to ensure it's treated as an image
             const imageUrl = `/api/model-proxy?url=${encodeURIComponent(taskData.renderedImage)}&forceImageRedirect=true`;
             
@@ -637,8 +783,8 @@ export default function CustomizerPage() {
             }
           }
         }
-      } catch (imageError) {
-        console.error('Failed to load fallback image:', imageError);
+      } catch (taskImageError) {
+        console.error('Failed to load fallback image from task status:', taskImageError);
       }
       
       // Last resort - create a placeholder model
@@ -659,10 +805,22 @@ export default function CustomizerPage() {
       console.log('Loading STL model from:', modelUrl);
       const loader = new STLLoader();
       
+      // Add console logging for debugging purposes
+      console.log('Starting STL load operation with URL:', modelUrl);
+      
+      // Build URL properly - add proxy if needed
+      const isAlreadyProxied = modelUrl.includes('/api/model-proxy');
+      const proxyUrl = isAlreadyProxied ? 
+        modelUrl : // Use as is if already proxied
+        `/api/model-proxy?url=${encodeURIComponent(modelUrl)}`;
+        
+      console.log('Final URL for STL loading:', proxyUrl);
+      
       loader.load(
-        modelUrl,
+        proxyUrl,
         (geometry) => {
           try {
+            console.log('STL geometry loaded successfully, processing...');
             // Calculate the bounding box to center and scale the model
             geometry.computeBoundingBox();
             const boundingBox = geometry.boundingBox!;
@@ -704,7 +862,7 @@ export default function CustomizerPage() {
             }
             
             setIsLoading(false);
-            console.log('STL model loaded successfully');
+            console.log('STL model loaded successfully and added to scene');
             resolve();
           } catch (geometryError) {
             console.error('Error processing STL geometry:', geometryError);
@@ -712,7 +870,8 @@ export default function CustomizerPage() {
           }
         },
         (xhr) => {
-          console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+          const percentage = xhr.loaded / (xhr.total || xhr.loaded) * 100;
+          console.log(`STL loading: ${percentage.toFixed(2)}% loaded`);
         },
         (error) => {
           console.error('Error loading STL:', error);
@@ -724,90 +883,99 @@ export default function CustomizerPage() {
   
   // Load GLTF/GLB model with server-side proxy
   const loadGLTFModel = (modelUrl: string) => {
-    console.log("Loading GLB model from:", modelUrl);
-    
-    // Create a proxy URL to avoid CORS issues with external model URLs
-    // Only create a proxy URL if it's not already proxied
-    const isAlreadyProxied = modelUrl.includes('/api/model-proxy');
-    const proxyUrl = isAlreadyProxied ? 
-      modelUrl : // Use as is if already proxied
-      `/api/model-proxy?url=${encodeURIComponent(modelUrl)}`;
+    return new Promise<void>((resolve, reject) => {
+      console.log("Loading GLB model from:", modelUrl);
       
-    console.log("Using proxied URL:", proxyUrl);
-    
-    const loader = new GLTFLoader();
-    setIsLoading(true);
-    
-    loader.load(
-      proxyUrl,
-      (gltf) => {
-        const model = gltf.scene;
+      // Create a proxy URL to avoid CORS issues with external model URLs
+      // Only create a proxy URL if it's not already proxied
+      const isAlreadyProxied = modelUrl.includes('/api/model-proxy');
+      const proxyUrl = isAlreadyProxied ? 
+        modelUrl : // Use as is if already proxied
+        `/api/model-proxy?url=${encodeURIComponent(modelUrl)}`;
         
-        // Calculate bounding box for the entire model
-        const box = new THREE.Box3().setFromObject(model);
-        const size = new THREE.Vector3();
-        box.getSize(size);
-        const maxDim = Math.max(size.x, size.y, size.z);
-        
-        // Scale and center the model
-        const scale = 5 / maxDim;
-        model.scale.set(scale, scale, scale);
-        
-        // Center the model based on its bounding box
-        const center = new THREE.Vector3();
-        box.getCenter(center);
-        model.position.x = -center.x * scale;
-        model.position.y = -center.y * scale;
-        model.position.z = -center.z * scale;
-        
-        // Apply material to all meshes in the model
-        model.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            // Save original material for reference
-            const originalMaterial = child.material;
+      console.log("Using proxied URL for GLB/GLTF:", proxyUrl);
+      
+      const loader = new GLTFLoader();
+      setIsLoading(true);
+      
+      loader.load(
+        proxyUrl,
+        (gltf) => {
+          try {
+            console.log('GLTF/GLB model loaded successfully, processing...');
+            const model = gltf.scene;
             
-            // Use our own material but copy some properties if possible
-            const materialToUse = materials[selectedMaterial];
-            child.material = materialToUse;
+            // Calculate bounding box for the entire model
+            const box = new THREE.Box3().setFromObject(model);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            const maxDim = Math.max(size.x, size.y, size.z);
             
-            // Setup shadows
-            child.castShadow = true;
-            child.receiveShadow = true;
+            // Scale and center the model
+            const scale = 5 / maxDim;
+            model.scale.set(scale, scale, scale);
+            
+            // Center the model based on its bounding box
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+            model.position.x = -center.x * scale;
+            model.position.y = -center.y * scale;
+            model.position.z = -center.z * scale;
+            
+            // Apply material to all meshes in the model
+            model.traverse((child) => {
+              if (child instanceof THREE.Mesh) {
+                // Save original material for reference
+                const originalMaterial = child.material;
+                
+                // Use our own material but copy some properties if possible
+                const materialToUse = materials[selectedMaterial];
+                child.material = materialToUse;
+                
+                // Setup shadows
+                child.castShadow = true;
+                child.receiveShadow = true;
+              }
+            });
+            
+            // Apply size scaling
+            const sizeToUse = selectedSize || "medium";
+            const sizeScale = sizeToUse === "small" ? 0.8 : sizeToUse === "medium" ? 1.0 : 1.2;
+            model.scale.multiplyScalar(sizeScale);
+            
+            // Add model to scene
+            if (sceneRef.current) {
+              // Remove existing model if any
+              cleanupObject(modelRef.current)
+              
+              sceneRef.current.add(model);
+              modelRef.current = model;
+              
+              // Reset camera position
+              if (controlsRef.current) {
+                controlsRef.current.reset();
+              }
+            }
+            
+            setIsLoading(false);
+            console.log('GLTF/GLB model loaded successfully and added to scene');
+            resolve();
+          } catch (err) {
+            console.error('Error processing GLTF/GLB geometry:', err);
+            reject(err);
           }
-        });
-        
-        // Apply size scaling
-        const sizeToUse = selectedSize || "medium";
-        const sizeScale = sizeToUse === "small" ? 0.8 : sizeToUse === "medium" ? 1.0 : 1.2;
-        model.scale.multiplyScalar(sizeScale);
-        
-        // Add model to scene
-        if (sceneRef.current) {
-          // Remove existing model if any
-          cleanupObject(modelRef.current)
-          
-          sceneRef.current.add(model);
-          modelRef.current = model;
-          
-          // Reset camera position
-          if (controlsRef.current) {
-            controlsRef.current.reset();
-          }
+        },
+        (xhr) => {
+          const percentage = xhr.loaded / (xhr.total || xhr.loaded) * 100;
+          console.log(`GLTF/GLB loading: ${percentage.toFixed(2)}% loaded`);
+        },
+        (error) => {
+          console.error("Error loading GLB/GLTF:", error);
+          setIsLoading(false);
+          reject(error);
         }
-        
-        setIsLoading(false);
-      },
-      (xhr) => {
-        console.log((xhr.loaded / xhr.total) * 100 + "% loaded");
-      },
-      (error) => {
-        console.error("Error loading GLB/GLTF:", error);
-        setIsLoading(false);
-        
-        // If we can't load the model directly, try to convert it to STL first
-        convertAndLoadSTL(modelUrl);
-      }
-    );
+      );
+    });
   };
   
   // Helper function to create a plane with the rendered image
@@ -820,13 +988,103 @@ export default function CustomizerPage() {
       // Add loading indicator
       setIsLoading(true);
       
+      // Extract task ID from URL in multiple formats (standard UUID format and Tripo task ID)
+      let taskId = null;
+      
+      // Try UUID format first
+      const uuidMatch = imageUrl.match(/\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\//i);
+      if (uuidMatch && uuidMatch[1]) {
+        taskId = uuidMatch[1];
+        console.log('Extracted UUID task ID from URL:', taskId);
+      }
+      
+      // Try Tripo pattern (looking for taskId in mesh.glb or mesh.stl URLs)
+      if (!taskId && (imageUrl.includes('/mesh.glb') || imageUrl.includes('/mesh.stl'))) {
+        const tripoTaskMatch = imageUrl.match(/\/([^\/]+)\/mesh\.(glb|stl)/i);
+        if (tripoTaskMatch && tripoTaskMatch[1]) {
+          taskId = tripoTaskMatch[1];
+          console.log('Extracted Tripo task ID from URL:', taskId);
+        }
+      }
+      
+      // If we have a taskId, try the specialized tripo-image endpoint first
+      if (taskId && imageUrl.includes('tripo')) {
+        try {
+          console.log('Trying specialized tripo-image endpoint with taskId:', taskId);
+          const tripoImageUrl = `/api/tripo-image?taskId=${encodeURIComponent(taskId)}`;
+          
+          // Check if the image exists
+          const checkResponse = await fetch(tripoImageUrl, { method: 'HEAD' });
+          if (checkResponse.ok) {
+            console.log('tripo-image endpoint available, using it directly');
+            
+            const planeGeometry = new THREE.PlaneGeometry(5, 5);
+            
+            // Load image with the specialized endpoint
+            const texture = await new Promise<THREE.Texture>((resolve, reject) => {
+              const loader = new THREE.TextureLoader();
+              loader.load(
+                tripoImageUrl,
+                (loadedTexture) => {
+                  // Adjust aspect ratio
+                  if (loadedTexture.image) {
+                    const aspectRatio = loadedTexture.image.width / loadedTexture.image.height;
+                    planeGeometry.scale(aspectRatio, 1, 1);
+                  }
+                  resolve(loadedTexture);
+                },
+                undefined,
+                (error) => {
+                  console.error('Error loading texture from tripo-image:', error);
+                  reject(error);
+                }
+              );
+            });
+            
+            // Create material with loaded texture
+            const planeMaterial = new THREE.MeshBasicMaterial({ 
+              map: texture, 
+              side: THREE.DoubleSide,
+              transparent: true
+            });
+            
+            const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+            
+            // Center the plane
+            plane.position.set(0, 0, 0);
+            
+            // Cleanup existing model
+            cleanupObject(modelRef.current);
+            
+            // Add plane to scene
+            sceneRef.current.add(plane);
+            modelRef.current = plane;
+            
+            // Show message to user
+            toast({
+              title: "3D Model",
+              description: "Only a 2D render is available for this design. The actual 3D model couldn't be loaded.",
+              duration: 5000
+            });
+            
+            setIsLoading(false);
+            return true;
+          } 
+        } catch (tripoImageError) {
+          console.error('Failed to use tripo-image endpoint:', tripoImageError);
+          // Continue with original approach as fallback
+        }
+      }
+      
       // First try to load the image through our proxy to avoid CORS issues
       // Only create proxy URL if not already proxied
       const isAlreadyProxied = imageUrl.includes('/api/model-proxy');
-      const proxiedImageUrl = isAlreadyProxied ? 
-        imageUrl : 
-        `/api/model-proxy?url=${encodeURIComponent(imageUrl)}&forceImageRedirect=true`;
-        
+      let proxiedImageUrl = imageUrl;
+      
+      if (!isAlreadyProxied) {
+        proxiedImageUrl = `/api/model-proxy?url=${encodeURIComponent(imageUrl)}${taskId ? `&taskId=${taskId}` : ''}&forceImageRedirect=true`;
+      }
+      
       console.log("Using proxied image URL:", proxiedImageUrl);
       
       // Create a textured plane with the image
@@ -846,6 +1104,30 @@ export default function CustomizerPage() {
             imgElement.addEventListener('error', (e) => {
               console.log("Image loading error intercepted, trying base64 fallback");
               
+              // If we have a taskId, try one last attempt with tripo-image
+              if (taskId && imageUrl.includes('tripo')) {
+                console.log('After image loading error, trying tripo-image as last resort');
+                const tripoImageUrl = `/api/tripo-image?taskId=${encodeURIComponent(taskId)}`;
+                
+                const lastResortLoader = new THREE.TextureLoader();
+                lastResortLoader.load(
+                  tripoImageUrl,
+                  (successTexture) => {
+                    console.log('Last resort tripo-image succeeded!');
+                    resolve(successTexture);
+                  },
+                  undefined,
+                  () => {
+                    // If all else fails, use placeholder
+                    console.log('All image loading attempts failed, using placeholder');
+                    const placeholderTexture = createFallbackTexture();
+                    resolve(placeholderTexture);
+                  }
+                );
+                
+                return;
+              }
+              
               // Try to load a placeholder texture instead
               const placeholderTexture = createFallbackTexture();
               resolve(placeholderTexture);
@@ -860,6 +1142,30 @@ export default function CustomizerPage() {
               (error) => {
                 console.error("TextureLoader error:", error);
                 if (onError) onError(error);
+                
+                // Final attempt with tripo-image if we have a taskId
+                if (taskId && imageUrl.includes('tripo')) {
+                  console.log('After texture loading error, trying tripo-image as last resort');
+                  const tripoImageUrl = `/api/tripo-image?taskId=${encodeURIComponent(taskId)}`;
+                  
+                  const lastResortLoader = new THREE.TextureLoader();
+                  lastResortLoader.load(
+                    tripoImageUrl,
+                    (successTexture) => {
+                      console.log('Last resort tripo-image succeeded!');
+                      resolve(successTexture);
+                    },
+                    undefined,
+                    () => {
+                      // If all else fails, use placeholder
+                      console.log('All image loading attempts failed, using placeholder');
+                      const placeholderTexture = createFallbackTexture();
+                      resolve(placeholderTexture);
+                    }
+                  );
+                  
+                  return;
+                }
                 
                 // Create a fallback texture with prompt name
                 const placeholderTexture = createFallbackTexture();
