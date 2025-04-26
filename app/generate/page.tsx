@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { CustomModelGenerator } from "../../lib/custom-model-generator"
-import { Toaster } from "../../temp-magicai/components/ui/toaster"
 import JewelryViewer from "../viewer/components/JewelryViewer"
 
 export default function GeneratePage() {
@@ -22,7 +21,6 @@ export default function GeneratePage() {
           <JewelryViewer stlUrl={generatedStlUrl} />
         </div>
       </div>
-      <Toaster />
     </main>
   )
 } 
