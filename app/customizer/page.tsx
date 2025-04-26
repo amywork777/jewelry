@@ -12,8 +12,9 @@ import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js"
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js"
 import { useToast } from "@/components/ui/use-toast"
+import JewelryViewer from "@/app/viewer/components/JewelryViewer"
 
-type JewelryType = "ring" | "necklace" | "earrings" | "bracelet" | "pendant"
+type JewelryType = "ring" | "necklace" | "earrings" | "bracelet" | "pendant" | "charm"
 type Material = "gold" | "silver" | "rosegold" | "platinum"
 type Size = "small" | "medium" | "large"
 
@@ -26,49 +27,37 @@ interface JewelryItem {
   description: string
 }
 
-// Function to convert AI search to STL using Tripo API via server-side proxy
-async function generateSTLFromAI(prompt: string, updateProgress: (progress: number) => void): Promise<string> {
-  if (!prompt || prompt.trim() === "") {
-    console.error("Empty prompt received in generateSTLFromAI");
-    throw new Error("Empty prompt not allowed");
-  }
-  
-  console.log("Generating 3D model from AI with prompt:", prompt);
-  
-  // Step 1: Create a model generation task
+// Function to generate an STL model from AI
+async function generateSTLFromAI(prompt: string, updateProgress: (progress: number) => void): Promise<{ modelUrl: string | null; baseModelUrl: string | null }> {
   try {
+    // 1. Submit the prompt to start generation
+    // Call our API route, which will call the Tripo API
     const response = await fetch("/api/tripo", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
-      body: JSON.stringify({ prompt: prompt.trim() }),
+      body: JSON.stringify({ prompt })
     });
     
     if (!response.ok) {
-      let errorData = "Unknown error";
-      try {
-        const data = await response.json();
-        console.error("API error details:", data);
-        errorData = JSON.stringify(data);
-      } catch (e) {
-        console.error("Could not parse error response");
-      }
-      throw new Error(`API error: ${response.status} ${response.statusText} - ${errorData}`);
+      const errorData = await response.json();
+      console.error("Error from Tripo API:", errorData);
+      throw new Error(errorData.error || "Failed to start model generation");
     }
     
     const data = await response.json();
+    const taskId = data.taskId;
     
-    if (!data.taskId) {
-      console.error("API response missing taskId:", data);
-      throw new Error("No task ID returned from API");
+    if (!taskId) {
+      throw new Error("No task ID in response");
     }
     
-    const taskId = data.taskId;
-    console.log("Created model task with ID:", taskId);
+    console.log("Model generation started with task ID:", taskId);
     
     // Step 2: Poll for task status until completed
     let modelUrl: string | null = null;
+    let baseModelUrl: string | null = null;
     let renderedImage: string | null = null;
     let maxRetries = 5; // Increased retries
     let retryCount = 0;
@@ -90,10 +79,12 @@ async function generateSTLFromAI(prompt: string, updateProgress: (progress: numb
         // Try to get model URL from the response
         if (result.modelUrl) {
           modelUrl = result.modelUrl;
+          baseModelUrl = result.baseModelUrl;
           break;
         } else if (result.baseModelUrl) {
           // If no modelUrl but baseModelUrl exists, use that
           modelUrl = result.baseModelUrl;
+          baseModelUrl = result.baseModelUrl;
           break;
         } 
         
@@ -134,7 +125,7 @@ async function generateSTLFromAI(prompt: string, updateProgress: (progress: numb
             // If we have a rendered image but no model, we'll use a placeholder model
             // but at least we know the generation completed successfully
             console.log("No model URL after all retries, but generation succeeded. Using placeholder model.");
-            return "placeholder";
+            return { modelUrl: "placeholder", baseModelUrl: null };
           }
           throw new Error("No model URL in successful response");
         }
@@ -154,7 +145,7 @@ async function generateSTLFromAI(prompt: string, updateProgress: (progress: numb
       .substring(0, 30);        // Limit length
     
     // AI generated a valid model URL or at least a fallback
-    return modelUrl || "placeholder";
+    return { modelUrl: modelUrl || "placeholder", baseModelUrl };
   } catch (error) {
     console.error("Error in generateSTLFromAI:", error);
     throw error; // Re-throw to allow proper handling in calling code
@@ -211,11 +202,14 @@ export default function CustomizerPage() {
   const [selectedJewelry, setSelectedJewelry] = useState<JewelryItem | null>(null)
   const [selectedMaterial, setSelectedMaterial] = useState<Material>("gold")
   const [selectedSize, setSelectedSize] = useState<Size>("medium")
+  const [showBaseShape, setShowBaseShape] = useState(true)
+  
   const [isLoading, setIsLoading] = useState(false)
-  const [aiGeneratedModel, setAiGeneratedModel] = useState<string | null>(null)
-  const [aiGeneratedName, setAiGeneratedName] = useState<string>("")
-  const [generationProgress, setGenerationProgress] = useState<number>(0)
+  const [generationProgress, setGenerationProgress] = useState(0)
   const [generationError, setGenerationError] = useState<string | null>(null)
+  const [aiGeneratedModel, setAIGeneratedModel] = useState<string | null>(null)
+  const [aiGeneratedName, setAIGeneratedName] = useState<string>("")
+  const [generatedStlUrl, setGeneratedStlUrl] = useState<string | null>(null)
   
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dropAreaRef = useRef<HTMLDivElement>(null)
@@ -228,106 +222,115 @@ export default function CustomizerPage() {
   
   const { toast } = useToast()
   
-  // Define handleAIClick before it's used in any useEffect
-  const handleAIClick = useCallback(async (promptInput?: string | React.MouseEvent<HTMLButtonElement>) => {
-    // Determine if this is a direct call with a string or a click event
-    let promptToUse = searchText;
+  const handleAIClick = async () => {
+    if (!searchText.trim() || isLoading) return;
     
-    if (typeof promptInput === 'string') {
-      promptToUse = promptInput;
-      console.log("Using provided prompt:", promptToUse);
-    }
-    
-    if (!promptToUse.trim()) {
-      alert("Please enter a jewelry description for AI to generate");
-      return;
-    }
+    // Set the AI generated name for display during loading
+    setAIGeneratedName(searchText.trim());
+    setIsLoading(true);
+    setGenerationProgress(0);
+    setGenerationError(null);
     
     try {
-      setIsLoading(true);
-      setGenerationError(null);
-      setGenerationProgress(0);
-      setAiGeneratedName(promptToUse);
+      // Clean up any existing 3D objects
+      if (modelRef.current) {
+        cleanupObject(modelRef.current);
+        sceneRef.current?.remove(modelRef.current);
+        modelRef.current = null;
+      }
       
-      console.log("Starting AI generation with prompt:", promptToUse);
+      // Create a placeholder for the loading state
+      createPlaceholderModel(true);
       
-      // Start the AI generation process
-      const modelUrl = await generateSTLFromAI(promptToUse, (progress) => {
-        setGenerationProgress(progress);
-      });
+      // Generate STL from AI
+      const { modelUrl, baseModelUrl } = await generateSTLFromAI(
+        searchText,
+        (progress) => setGenerationProgress(progress)
+      );
       
-      console.log("AI generation complete, model URL:", modelUrl ? modelUrl.substring(0, 100) + "..." : "placeholder");
+      if (!modelUrl) {
+        throw new Error("Failed to generate 3D model");
+      }
       
-      // Create a custom jewelry item for the AI-generated model
-      const aiJewelry: JewelryItem = {
-        id: Date.now(), // Use timestamp as unique ID
-        type: "pendant", // Default type, could be made smarter with prompt analysis
-        name: `AI Design: ${promptToUse}`,
-        stlPath: modelUrl === "placeholder" ? "" : modelUrl, // Special handling for placeholder
-        price: 599.99, // Default price
-        description: `Custom AI-generated design based on: "${promptToUse}"`
+      console.log("AI generated model URL:", modelUrl);
+      console.log("Base model URL:", baseModelUrl);
+      
+      // Store the generated model URLs
+      setAIGeneratedModel(modelUrl);
+      setGeneratedStlUrl(modelUrl);
+      
+      // Create a new item for the AI generated model
+      const newItem: JewelryItem = {
+        id: Date.now(), // Use timestamp as a unique ID
+        type: "charm", // Default to pendant type
+        name: searchText,
+        stlPath: modelUrl, // Use the URL from the AI generation
+        price: 149.99,
+        description: `Custom ${searchText} design generated with AI.`
       };
       
-      // Set the AI generated model URL for reference
-      setAiGeneratedModel(modelUrl === "placeholder" ? null : modelUrl);
+      // Set the new item as selected
+      setSelectedJewelry(newItem);
       
-      // Update the selected jewelry item to trigger the useEffect that will load the model
-      setSelectedJewelry(aiJewelry);
-      
-      if (modelUrl === "placeholder") {
-        console.log("Using placeholder model for AI-generated design");
+      // Clean up the placeholder
+      if (modelRef.current) {
+        cleanupObject(modelRef.current);
+        sceneRef.current?.remove(modelRef.current);
+        modelRef.current = null;
       }
+      
     } catch (error) {
-      console.error("AI generation failed:", error);
-      setGenerationError(error instanceof Error ? error.message : String(error));
-      alert(`Could not generate 3D model: ${error instanceof Error ? error.message : String(error)}`);
+      console.error("Error in AI generation:", error);
+      setGenerationError(error instanceof Error ? error.message : "Unknown error");
+      
+      // Create a placeholder to show error state
+      createColorfulPlaceholder();
     } finally {
-      // We'll keep the loading state active until the model is fully loaded
-      // in the useEffect hook that loads the model
+      setIsLoading(false);
     }
-  }, [searchText, setIsLoading, setGenerationError, setGenerationProgress, setAiGeneratedName, setAiGeneratedModel, setSelectedJewelry]); // Add all dependencies
+  };
   
   // Sample jewelry items
   const jewelryItems: JewelryItem[] = [
     {
       id: 1,
       type: "ring",
-      name: "Slotted Disk Ring",
-      stlPath: "/models/ring.stl",
+      name: "Classic Diamond Ring",
+      stlPath: "/models/ring.stl", // These would be real paths in a production app
       price: 799.99,
-      description: "Unique slotted disk design with a modern aesthetic"
+      description: "Elegant diamond ring with a timeless design"
     },
     {
       id: 2,
       type: "necklace",
       name: "Pearl Pendant Necklace",
-      stlPath: "/models/pendant.stl", // Using pendant model for necklace since we don't have a necklace model
+      stlPath: "/models/necklace.stl",
       price: 549.99,
-      description: "Beautiful pendant on a delicate chain"
+      description: "Beautiful pearl pendant on a delicate chain"
     },
     {
       id: 3,
       type: "earrings",
-      name: "Geometric Stud Earrings",
+      name: "Sapphire Stud Earrings",
       stlPath: "/models/earrings.stl",
       price: 399.99,
-      description: "Stunning geometric studs for everyday elegance"
+      description: "Stunning sapphire studs for everyday elegance"
     },
     {
       id: 4,
       type: "bracelet",
-      name: "Sculptural Bracelet",
-      stlPath: "/models/ring.stl", // Using ring model for bracelet since we don't have a bracelet model
+      name: "Tennis Bracelet",
+      stlPath: "/models/bracelet.stl",
       price: 1299.99,
-      description: "Unique sculptural bracelet with a modern design"
+      description: "Sparkling tennis bracelet with premium diamonds"
     },
     {
       id: 5,
       type: "pendant",
-      name: "Modern Pendant",
+      name: "Heart Locket",
       stlPath: "/models/pendant.stl",
       price: 349.99,
-      description: "Contemporary pendant design with a geometric shape"
+      description: "Heart-shaped locket for your precious memories"
     }
   ]
   
@@ -527,94 +530,51 @@ export default function CustomizerPage() {
   
   // Function to load a model when selectedJewelry changes
   useEffect(() => {
-    if (!selectedJewelry || !sceneRef.current) return
-    
-    // Remove existing model
-    cleanupObject(modelRef.current)
-    
-    // Check if we have an AI-generated model
-    const isAIGenerated = selectedJewelry.name.startsWith('AI Design:');
-    
-    if (isAIGenerated && selectedJewelry.stlPath) {
+    if (selectedJewelry) {
       setIsLoading(true)
       
-      // Always convert Tripo GLB models to STL first
-      if (selectedJewelry.stlPath.includes('tripo-data.rg1.data.tripo3d.com') || 
-          selectedJewelry.stlPath.includes('mesh.glb')) {
-        console.log("Detected Tripo model URL, converting to STL:", selectedJewelry.stlPath);
-        convertAndLoadSTL(selectedJewelry.stlPath);
-      } else {
-        // For other file types, proceed with normal loading
-        const fileExtension = selectedJewelry.stlPath.split('.').pop()?.toLowerCase();
-        
-        if (fileExtension === 'stl') {
-          loadSTLModel(selectedJewelry.stlPath);
-        } else if (fileExtension === 'glb' || fileExtension === 'gltf') {
-          loadGLTFModel(selectedJewelry.stlPath);
+      if (selectedJewelry.stlPath === aiGeneratedModel) {
+        if (generatedStlUrl) {
+          // This is an AI model with a base model URL
+          loadSTLModel(generatedStlUrl)
         } else {
-          console.warn(`Unknown file extension: ${fileExtension}, using placeholder model`);
-          createPlaceholderModel(true);
+          // No model yet, create placeholder
+          createPlaceholderModel(true)
         }
+      } else if (selectedJewelry.stlPath.endsWith('.stl')) {
+        // Load STL file
+        loadSTLModel(selectedJewelry.stlPath)
+      } else if (selectedJewelry.stlPath.endsWith('.gltf') || selectedJewelry.stlPath.endsWith('.glb')) {
+        // Load GLTF file
+        loadGLTFModel(selectedJewelry.stlPath)
+      } else {
+        // Create a placeholder for regular products
+        createPlaceholderModel(false)
       }
     } else {
-      // For catalog items without proper paths, create placeholder
-      createPlaceholderModel(false);
+      // No jewelry selected, create simple placeholder
+      createPlaceholderModel(false)
     }
-  }, [selectedJewelry, selectedMaterial, selectedSize, aiGeneratedModel]);
+  }, [selectedJewelry, aiGeneratedModel, generatedStlUrl, selectedMaterial, selectedSize, showBaseShape])
   
-  // Convert and load models (handles both GLB and STL formats)
+  // Convert remote model to STL and load it
   const convertAndLoadSTL = async (modelUrl: string) => {
     try {
-      console.log('Loading 3D model from:', modelUrl);
+      // If it's already an STL file, load it directly
+      if (modelUrl.endsWith('.stl')) {
+        console.log('Loading STL model directly:', modelUrl);
+        await loadSTLModel(modelUrl);
+        return;
+      }
+
+      console.log('Converting model to STL:', modelUrl);
       
-      // Extract the file extension
-      const fileExtension = modelUrl.toLowerCase().split('.').pop();
-      
-      // Extract the task ID from the URL with support for multiple formats
+      // Extract the task ID from the URL if possible (UUID format)
       let taskId: string | null = null;
-      
-      // Try UUID format first
-      const uuidMatch = modelUrl.match(/\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\//i);
-      if (uuidMatch && uuidMatch[1]) {
-        taskId = uuidMatch[1];
-        console.log('Extracted UUID task ID from URL:', taskId);
-      }
-      
-      // Try Tripo pattern (looking for taskId in mesh.glb or mesh.stl URLs)
-      if (!taskId && (modelUrl.includes('/mesh.glb') || modelUrl.includes('/mesh.stl'))) {
-        const tripoTaskMatch = modelUrl.match(/\/([^\/]+)\/mesh\.(glb|stl)/i);
-        if (tripoTaskMatch && tripoTaskMatch[1]) {
-          taskId = tripoTaskMatch[1];
-          console.log('Extracted Tripo task ID from URL:', taskId);
-        }
-      }
-      
-      // For Tripo URLs with taskId, try the specialized tripo-image endpoint first
-      // This is often more reliable than trying to load the 3D model
-      if (taskId && modelUrl.includes('tripo')) {
-        try {
-          console.log('Detected Tripo URL with taskId, trying specialized tripo-image endpoint first');
-          const tripoImageUrl = `/api/tripo-image?taskId=${encodeURIComponent(taskId)}`;
-          
-          // Check if the image exists
-          const checkResponse = await fetch(tripoImageUrl, { method: 'HEAD' });
-          if (checkResponse.ok) {
-            console.log('tripo-image available - trying it first before 3D model load attempts');
-            const success = await createImagePlane(tripoImageUrl);
-            if (success) {
-              toast({
-                title: "Model Preview",
-                description: "Showing a 2D render of the model for better reliability. You can still try the 3D version with the button below.",
-                duration: 5000,
-              });
-              setIsLoading(false);
-              return;
-            }
-          }
-        } catch (tripoImageError) {
-          console.error('Failed initial tripo-image check:', tripoImageError);
-          // Continue with 3D loading attempts
-        }
+      const taskIdMatch = modelUrl.match(/\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\//i);
+      if (taskIdMatch && taskIdMatch[1]) {
+        taskId = taskIdMatch[1];
+        console.log('Extracted task ID from URL:', taskId);
       }
       
       // Use our proxy endpoint to avoid CORS issues - but only once
@@ -625,138 +585,27 @@ export default function CustomizerPage() {
         modelUrl : // Use as is if already proxied
         `/api/model-proxy?url=${encodeURIComponent(modelUrl)}${taskId ? `&taskId=${taskId}` : ''}`;
       
-      // Check for image fallbacks before trying 3D formats
-      if (modelUrl.includes('webp') || modelUrl.includes('jpg') || modelUrl.includes('png')) {
-        console.log('Detected image URL, creating image plane');
-        const success = await createImagePlane(modelUrl);
-        if (success) {
-          setIsLoading(false);
-          return;
-        }
-      }
-      
-      // Try the appropriate loader based on the file extension
-      if (fileExtension === 'stl') {
-        console.log('Loading STL model directly');
+      try {
+        // First try loading directly with STL loader
+        console.log('Attempting to load with STL loader:', proxyUrl);
+        await loadSTLModel(proxyUrl);
+        return;
+      } catch (stlError) {
+        console.error('Failed to load as STL:', stlError);
+        
+        // If STL loading fails, try GLB/GLTF loader
         try {
-          await loadSTLModel(modelUrl);
-          return;
-        } catch (stlError) {
-          console.error('Error loading STL:', stlError);
-          // Continue to fallbacks
-        }
-      } else if (fileExtension === 'glb' || fileExtension === 'gltf') {
-        console.log('Loading GLB/GLTF model directly');
-        try {
-          await loadGLTFModel(modelUrl);
+          console.log('Attempting to load with GLTF loader');
+          await loadGLTFModel(proxyUrl);
           return;
         } catch (glbError) {
-          console.error('Error loading GLB/GLTF:', glbError);
-          // Continue to fallbacks
+          console.error('Failed to load as GLB/GLTF:', glbError);
         }
       }
       
-      // Instead of trying multiple loaders, use direct-fetch.html viewer which has more robust loading
-      console.log('Using direct-fetch approach for more reliable loading');
-      
-      // Open the direct-fetch viewer in an iframe
+      // If model loading failed, try to get an image instead
       try {
-        const directFetchUrl = `/direct-fetch.html?url=${encodeURIComponent(modelUrl)}`;
-        console.log('Opening model in direct-fetch viewer:', directFetchUrl);
-        
-        // Show the direct fetch viewer in an iframe
-        const iframe = document.createElement('iframe');
-        iframe.src = directFetchUrl;
-        iframe.style.width = '100%';
-        iframe.style.height = '100%';
-        iframe.style.border = 'none';
-        
-        // Clear current scene
-        if (sceneRef.current) {
-          while (sceneRef.current.children.length) {
-            const object = sceneRef.current.children[0];
-            sceneRef.current.remove(object);
-          }
-        }
-        
-        // Add iframe to the canvas container
-        if (canvasRef.current) {
-          // Clear any existing content
-          while (canvasRef.current.firstChild) {
-            canvasRef.current.removeChild(canvasRef.current.firstChild);
-          }
-          
-          // Add the iframe
-          canvasRef.current.appendChild(iframe);
-        }
-        
-        // Hide loading indicator
-        setIsLoading(false);
-        
-        return;
-      } catch (directFetchError) {
-        console.error('Failed to use direct-fetch approach:', directFetchError);
-        
-        // Fall back to traditional loaders
-        console.log('Falling back to traditional loaders');
-        
-        // First try loading with STL loader (preferred format)
-        try {
-          console.log('Attempting to load with STL loader first (preferred format)');
-          // Force the URL to be STL version if it's GLB
-          const stlUrl = proxyUrl.includes('mesh.glb') ? 
-            proxyUrl.replace('mesh.glb', 'mesh.stl') : proxyUrl;
-          
-          await loadSTLModel(stlUrl);
-          return;
-        } catch (stlError) {
-          console.error('Failed to load as STL:', stlError);
-          
-          // If STL loading fails, try GLTF/GLB loader as fallback
-          try {
-            console.log('Falling back to GLTF/GLB loader');
-            // Make sure we're using the GLB version with a flag to not redirect to STL
-            const glbUrl = proxyUrl.includes('mesh.stl') ? 
-              proxyUrl.replace('mesh.stl', 'mesh.glb') : 
-              (proxyUrl.includes('mesh.glb') ? 
-                proxyUrl + '&forceGLB=true' : proxyUrl);
-            
-            await loadGLTFModel(glbUrl);
-            return;
-          } catch (glbError) {
-            console.error('Failed to load as GLB/GLTF:', glbError);
-          }
-        }
-      }
-      
-      // Try image fallbacks with specialized tripo-image endpoint first
-      if (taskId && modelUrl.includes('tripo')) {
-        try {
-          console.log('3D model loading failed, trying tripo-image API as fallback');
-          const tripoImageUrl = `/api/tripo-image?taskId=${encodeURIComponent(taskId)}`;
-          
-          const imageResponse = await fetch(tripoImageUrl, { method: 'HEAD' });
-          if (imageResponse.ok) {
-            console.log('tripo-image endpoint available as fallback');
-            const success = await createImagePlane(tripoImageUrl);
-            if (success) {
-              toast({
-                title: "3D Model Preview",
-                description: "We're showing a 2D preview instead of a 3D model.",
-                duration: 5000,
-              });
-              setIsLoading(false);
-              return;
-            }
-          }
-        } catch (tripoImageError) {
-          console.error('Failed to use tripo-image fallback:', tripoImageError);
-        }
-      }
-      
-      // If model loading failed, try to get an image from task status
-      try {
-        console.log('All 3D loading and tripo-image attempts failed, checking task-status for rendered image');
+        console.log('All 3D loading failed, checking for rendered image');
         const taskApiEndpoint = taskId ? 
           `/api/task-status?taskId=${taskId}` : 
           `/api/tripo`;
@@ -767,7 +616,7 @@ export default function CustomizerPage() {
           const taskData = await taskResponse.json();
           
           if (taskData.renderedImage) {
-            console.log('Using rendered image from task-status as fallback');
+            console.log('Using rendered image as fallback');
             // Pass forceImageRedirect flag to ensure it's treated as an image
             const imageUrl = `/api/model-proxy?url=${encodeURIComponent(taskData.renderedImage)}&forceImageRedirect=true`;
             
@@ -783,8 +632,8 @@ export default function CustomizerPage() {
             }
           }
         }
-      } catch (taskImageError) {
-        console.error('Failed to load fallback image from task status:', taskImageError);
+      } catch (imageError) {
+        console.error('Failed to load fallback image:', imageError);
       }
       
       // Last resort - create a placeholder model
@@ -805,22 +654,10 @@ export default function CustomizerPage() {
       console.log('Loading STL model from:', modelUrl);
       const loader = new STLLoader();
       
-      // Add console logging for debugging purposes
-      console.log('Starting STL load operation with URL:', modelUrl);
-      
-      // Build URL properly - add proxy if needed
-      const isAlreadyProxied = modelUrl.includes('/api/model-proxy');
-      const proxyUrl = isAlreadyProxied ? 
-        modelUrl : // Use as is if already proxied
-        `/api/model-proxy?url=${encodeURIComponent(modelUrl)}`;
-        
-      console.log('Final URL for STL loading:', proxyUrl);
-      
       loader.load(
-        proxyUrl,
+        modelUrl,
         (geometry) => {
           try {
-            console.log('STL geometry loaded successfully, processing...');
             // Calculate the bounding box to center and scale the model
             geometry.computeBoundingBox();
             const boundingBox = geometry.boundingBox!;
@@ -862,7 +699,7 @@ export default function CustomizerPage() {
             }
             
             setIsLoading(false);
-            console.log('STL model loaded successfully and added to scene');
+            console.log('STL model loaded successfully');
             resolve();
           } catch (geometryError) {
             console.error('Error processing STL geometry:', geometryError);
@@ -870,8 +707,7 @@ export default function CustomizerPage() {
           }
         },
         (xhr) => {
-          const percentage = xhr.loaded / (xhr.total || xhr.loaded) * 100;
-          console.log(`STL loading: ${percentage.toFixed(2)}% loaded`);
+          console.log((xhr.loaded / xhr.total * 100) + '% loaded');
         },
         (error) => {
           console.error('Error loading STL:', error);
@@ -883,99 +719,90 @@ export default function CustomizerPage() {
   
   // Load GLTF/GLB model with server-side proxy
   const loadGLTFModel = (modelUrl: string) => {
-    return new Promise<void>((resolve, reject) => {
-      console.log("Loading GLB model from:", modelUrl);
+    console.log("Loading GLB model from:", modelUrl);
+    
+    // Create a proxy URL to avoid CORS issues with external model URLs
+    // Only create a proxy URL if it's not already proxied
+    const isAlreadyProxied = modelUrl.includes('/api/model-proxy');
+    const proxyUrl = isAlreadyProxied ? 
+      modelUrl : // Use as is if already proxied
+      `/api/model-proxy?url=${encodeURIComponent(modelUrl)}`;
       
-      // Create a proxy URL to avoid CORS issues with external model URLs
-      // Only create a proxy URL if it's not already proxied
-      const isAlreadyProxied = modelUrl.includes('/api/model-proxy');
-      const proxyUrl = isAlreadyProxied ? 
-        modelUrl : // Use as is if already proxied
-        `/api/model-proxy?url=${encodeURIComponent(modelUrl)}`;
+    console.log("Using proxied URL:", proxyUrl);
+    
+    const loader = new GLTFLoader();
+    setIsLoading(true);
+    
+    loader.load(
+      proxyUrl,
+      (gltf) => {
+        const model = gltf.scene;
         
-      console.log("Using proxied URL for GLB/GLTF:", proxyUrl);
-      
-      const loader = new GLTFLoader();
-      setIsLoading(true);
-      
-      loader.load(
-        proxyUrl,
-        (gltf) => {
-          try {
-            console.log('GLTF/GLB model loaded successfully, processing...');
-            const model = gltf.scene;
+        // Calculate bounding box for the entire model
+        const box = new THREE.Box3().setFromObject(model);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z);
+        
+        // Scale and center the model
+        const scale = 5 / maxDim;
+        model.scale.set(scale, scale, scale);
+        
+        // Center the model based on its bounding box
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        model.position.x = -center.x * scale;
+        model.position.y = -center.y * scale;
+        model.position.z = -center.z * scale;
+        
+        // Apply material to all meshes in the model
+        model.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            // Save original material for reference
+            const originalMaterial = child.material;
             
-            // Calculate bounding box for the entire model
-            const box = new THREE.Box3().setFromObject(model);
-            const size = new THREE.Vector3();
-            box.getSize(size);
-            const maxDim = Math.max(size.x, size.y, size.z);
+            // Use our own material but copy some properties if possible
+            const materialToUse = materials[selectedMaterial];
+            child.material = materialToUse;
             
-            // Scale and center the model
-            const scale = 5 / maxDim;
-            model.scale.set(scale, scale, scale);
-            
-            // Center the model based on its bounding box
-            const center = new THREE.Vector3();
-            box.getCenter(center);
-            model.position.x = -center.x * scale;
-            model.position.y = -center.y * scale;
-            model.position.z = -center.z * scale;
-            
-            // Apply material to all meshes in the model
-            model.traverse((child) => {
-              if (child instanceof THREE.Mesh) {
-                // Save original material for reference
-                const originalMaterial = child.material;
-                
-                // Use our own material but copy some properties if possible
-                const materialToUse = materials[selectedMaterial];
-                child.material = materialToUse;
-                
-                // Setup shadows
-                child.castShadow = true;
-                child.receiveShadow = true;
-              }
-            });
-            
-            // Apply size scaling
-            const sizeToUse = selectedSize || "medium";
-            const sizeScale = sizeToUse === "small" ? 0.8 : sizeToUse === "medium" ? 1.0 : 1.2;
-            model.scale.multiplyScalar(sizeScale);
-            
-            // Add model to scene
-            if (sceneRef.current) {
-              // Remove existing model if any
-              cleanupObject(modelRef.current)
-              
-              sceneRef.current.add(model);
-              modelRef.current = model;
-              
-              // Reset camera position
-              if (controlsRef.current) {
-                controlsRef.current.reset();
-              }
-            }
-            
-            setIsLoading(false);
-            console.log('GLTF/GLB model loaded successfully and added to scene');
-            resolve();
-          } catch (err) {
-            console.error('Error processing GLTF/GLB geometry:', err);
-            reject(err);
+            // Setup shadows
+            child.castShadow = true;
+            child.receiveShadow = true;
           }
-        },
-        (xhr) => {
-          const percentage = xhr.loaded / (xhr.total || xhr.loaded) * 100;
-          console.log(`GLTF/GLB loading: ${percentage.toFixed(2)}% loaded`);
-        },
-        (error) => {
-          console.error("Error loading GLB/GLTF:", error);
-          setIsLoading(false);
-          reject(error);
+        });
+        
+        // Apply size scaling
+        const sizeToUse = selectedSize || "medium";
+        const sizeScale = sizeToUse === "small" ? 0.8 : sizeToUse === "medium" ? 1.0 : 1.2;
+        model.scale.multiplyScalar(sizeScale);
+        
+        // Add model to scene
+        if (sceneRef.current) {
+          // Remove existing model if any
+          cleanupObject(modelRef.current)
+          
+          sceneRef.current.add(model);
+          modelRef.current = model;
+          
+          // Reset camera position
+          if (controlsRef.current) {
+            controlsRef.current.reset();
+          }
         }
-      );
-    });
+        
+        setIsLoading(false);
+      },
+      (xhr) => {
+        console.log((xhr.loaded / xhr.total) * 100 + "% loaded");
+      },
+      (error) => {
+        console.error("Error loading GLB/GLTF:", error);
+        setIsLoading(false);
+        
+        // If we can't load the model directly, try to convert it to STL first
+        convertAndLoadSTL(modelUrl);
+      }
+    );
   };
   
   // Helper function to create a plane with the rendered image
@@ -988,103 +815,13 @@ export default function CustomizerPage() {
       // Add loading indicator
       setIsLoading(true);
       
-      // Extract task ID from URL in multiple formats (standard UUID format and Tripo task ID)
-      let taskId = null;
-      
-      // Try UUID format first
-      const uuidMatch = imageUrl.match(/\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\//i);
-      if (uuidMatch && uuidMatch[1]) {
-        taskId = uuidMatch[1];
-        console.log('Extracted UUID task ID from URL:', taskId);
-      }
-      
-      // Try Tripo pattern (looking for taskId in mesh.glb or mesh.stl URLs)
-      if (!taskId && (imageUrl.includes('/mesh.glb') || imageUrl.includes('/mesh.stl'))) {
-        const tripoTaskMatch = imageUrl.match(/\/([^\/]+)\/mesh\.(glb|stl)/i);
-        if (tripoTaskMatch && tripoTaskMatch[1]) {
-          taskId = tripoTaskMatch[1];
-          console.log('Extracted Tripo task ID from URL:', taskId);
-        }
-      }
-      
-      // If we have a taskId, try the specialized tripo-image endpoint first
-      if (taskId && imageUrl.includes('tripo')) {
-        try {
-          console.log('Trying specialized tripo-image endpoint with taskId:', taskId);
-          const tripoImageUrl = `/api/tripo-image?taskId=${encodeURIComponent(taskId)}`;
-          
-          // Check if the image exists
-          const checkResponse = await fetch(tripoImageUrl, { method: 'HEAD' });
-          if (checkResponse.ok) {
-            console.log('tripo-image endpoint available, using it directly');
-            
-            const planeGeometry = new THREE.PlaneGeometry(5, 5);
-            
-            // Load image with the specialized endpoint
-            const texture = await new Promise<THREE.Texture>((resolve, reject) => {
-              const loader = new THREE.TextureLoader();
-              loader.load(
-                tripoImageUrl,
-                (loadedTexture) => {
-                  // Adjust aspect ratio
-                  if (loadedTexture.image) {
-                    const aspectRatio = loadedTexture.image.width / loadedTexture.image.height;
-                    planeGeometry.scale(aspectRatio, 1, 1);
-                  }
-                  resolve(loadedTexture);
-                },
-                undefined,
-                (error) => {
-                  console.error('Error loading texture from tripo-image:', error);
-                  reject(error);
-                }
-              );
-            });
-            
-            // Create material with loaded texture
-            const planeMaterial = new THREE.MeshBasicMaterial({ 
-              map: texture, 
-              side: THREE.DoubleSide,
-              transparent: true
-            });
-            
-            const plane = new THREE.Mesh(planeGeometry, planeMaterial);
-            
-            // Center the plane
-            plane.position.set(0, 0, 0);
-            
-            // Cleanup existing model
-            cleanupObject(modelRef.current);
-            
-            // Add plane to scene
-            sceneRef.current.add(plane);
-            modelRef.current = plane;
-            
-            // Show message to user
-            toast({
-              title: "3D Model",
-              description: "Only a 2D render is available for this design. The actual 3D model couldn't be loaded.",
-              duration: 5000
-            });
-            
-            setIsLoading(false);
-            return true;
-          } 
-        } catch (tripoImageError) {
-          console.error('Failed to use tripo-image endpoint:', tripoImageError);
-          // Continue with original approach as fallback
-        }
-      }
-      
       // First try to load the image through our proxy to avoid CORS issues
       // Only create proxy URL if not already proxied
       const isAlreadyProxied = imageUrl.includes('/api/model-proxy');
-      let proxiedImageUrl = imageUrl;
-      
-      if (!isAlreadyProxied) {
-        proxiedImageUrl = `/api/model-proxy?url=${encodeURIComponent(imageUrl)}${taskId ? `&taskId=${taskId}` : ''}&forceImageRedirect=true`;
-      }
-      
+      const proxiedImageUrl = isAlreadyProxied ? 
+        imageUrl : 
+        `/api/model-proxy?url=${encodeURIComponent(imageUrl)}&forceImageRedirect=true`;
+        
       console.log("Using proxied image URL:", proxiedImageUrl);
       
       // Create a textured plane with the image
@@ -1104,30 +841,6 @@ export default function CustomizerPage() {
             imgElement.addEventListener('error', (e) => {
               console.log("Image loading error intercepted, trying base64 fallback");
               
-              // If we have a taskId, try one last attempt with tripo-image
-              if (taskId && imageUrl.includes('tripo')) {
-                console.log('After image loading error, trying tripo-image as last resort');
-                const tripoImageUrl = `/api/tripo-image?taskId=${encodeURIComponent(taskId)}`;
-                
-                const lastResortLoader = new THREE.TextureLoader();
-                lastResortLoader.load(
-                  tripoImageUrl,
-                  (successTexture) => {
-                    console.log('Last resort tripo-image succeeded!');
-                    resolve(successTexture);
-                  },
-                  undefined,
-                  () => {
-                    // If all else fails, use placeholder
-                    console.log('All image loading attempts failed, using placeholder');
-                    const placeholderTexture = createFallbackTexture();
-                    resolve(placeholderTexture);
-                  }
-                );
-                
-                return;
-              }
-              
               // Try to load a placeholder texture instead
               const placeholderTexture = createFallbackTexture();
               resolve(placeholderTexture);
@@ -1142,30 +855,6 @@ export default function CustomizerPage() {
               (error) => {
                 console.error("TextureLoader error:", error);
                 if (onError) onError(error);
-                
-                // Final attempt with tripo-image if we have a taskId
-                if (taskId && imageUrl.includes('tripo')) {
-                  console.log('After texture loading error, trying tripo-image as last resort');
-                  const tripoImageUrl = `/api/tripo-image?taskId=${encodeURIComponent(taskId)}`;
-                  
-                  const lastResortLoader = new THREE.TextureLoader();
-                  lastResortLoader.load(
-                    tripoImageUrl,
-                    (successTexture) => {
-                      console.log('Last resort tripo-image succeeded!');
-                      resolve(successTexture);
-                    },
-                    undefined,
-                    () => {
-                      // If all else fails, use placeholder
-                      console.log('All image loading attempts failed, using placeholder');
-                      const placeholderTexture = createFallbackTexture();
-                      resolve(placeholderTexture);
-                    }
-                  );
-                  
-                  return;
-                }
                 
                 // Create a fallback texture with prompt name
                 const placeholderTexture = createFallbackTexture();
@@ -1343,6 +1032,11 @@ export default function CustomizerPage() {
       return
     }
     
+    // Clean up existing model
+    if (modelRef.current && sceneRef.current) {
+      cleanupObject(modelRef.current)
+    }
+    
     // Create more detailed placeholder geometry based on the jewelry type
     let geometry: THREE.BufferGeometry
     
@@ -1353,6 +1047,18 @@ export default function CustomizerPage() {
       
       // Let's create a fancy geometry for AI models when we don't have the actual model
       const randomSeed = selectedJewelry.id % 5; // Use the ID to get consistent but different shapes
+      
+      // Skip base shape creation if showBaseShape is false
+      if (!showBaseShape) {
+        // Create a minimal representation or an empty group
+        const emptyGroup = new THREE.Group();
+        if (sceneRef.current) {
+          sceneRef.current.add(emptyGroup);
+          modelRef.current = emptyGroup as unknown as THREE.Mesh;
+          setIsLoading(false);
+        }
+        return;
+      }
       
       switch (randomSeed) {
         case 0:
@@ -1422,6 +1128,18 @@ export default function CustomizerPage() {
           geometry = new THREE.OctahedronGeometry(2, 1);
       }
     } else {
+      // Skip base shape creation if showBaseShape is false
+      if (!showBaseShape) {
+        // Create a minimal representation or an empty group
+        const emptyGroup = new THREE.Group();
+        if (sceneRef.current) {
+          sceneRef.current.add(emptyGroup);
+          modelRef.current = emptyGroup as unknown as THREE.Mesh;
+          setIsLoading(false);
+        }
+        return;
+      }
+      
       // For catalog items, use the existing logic based on jewelry type
       switch (selectedJewelry.type) {
         case "ring":
@@ -1668,7 +1386,7 @@ export default function CustomizerPage() {
         }
         
         // Trigger AI generation with explicit prompt from URL
-        handleAIClick(promptFromURL);
+        handleAIClick();
       }, 500);
       
       return () => clearTimeout(timer);
@@ -1825,7 +1543,7 @@ export default function CustomizerPage() {
         <div className="w-24"></div>
       </div>
       
-      {/* Search */}
+      {/* Search and Generation Section */}
       <div className="w-full max-w-xl mb-8 mx-auto relative">
         <div 
           ref={dropAreaRef}
@@ -1980,134 +1698,8 @@ export default function CustomizerPage() {
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 mb-8">
-        {/* 3D Viewer with Controls */}
-        <div className="relative lg:col-span-2">
-          <div 
-            ref={canvasRef} 
-            className="w-full aspect-square bg-gray-50 rounded-lg shadow-inner overflow-hidden relative"
-          >
-            {/* Updated loading indicator with progress */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 z-10 transition-opacity duration-500" 
-                 style={{opacity: isLoading || !selectedJewelry ? 1 : 0, pointerEvents: isLoading || !selectedJewelry ? 'auto' : 'none'}}>
-              <div className="w-16 h-16 relative mb-3">
-                <div className="w-16 h-16 border-4 border-gray-200 rounded-full"></div>
-                {isLoading && (
-                  <div 
-                    className="absolute top-0 left-0 w-16 h-16 border-4 border-purple-500 rounded-full"
-                    style={{ 
-                      clipPath: `polygon(50% 50%, 50% 0%, ${50 + 50 * Math.sin(generationProgress * 0.02 * Math.PI)}% ${50 - 50 * Math.cos(generationProgress * 0.02 * Math.PI)}%, 50% 50%)`,
-                      transform: 'rotate(-90deg)'
-                    }}
-                  ></div>
-                )}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  {isLoading ? (
-                    <div className="h-6 w-6 border-2 border-gray-300 border-t-purple-600 rounded-full animate-spin"></div>
-                  ) : !selectedJewelry ? (
-                    <Search className="h-6 w-6 text-gray-400" />
-                  ) : (
-                    <span className="text-sm font-medium text-gray-600">Ready</span>
-                  )}
-                </div>
-              </div>
-              <span className="text-gray-500 text-sm">
-                {isLoading && aiGeneratedName 
-                  ? `Generating "${aiGeneratedName}"... ${generationProgress}%` 
-                  : isLoading 
-                    ? 'Loading 3D model...'
-                    : !selectedJewelry 
-                      ? 'Search for jewelry or use AI to generate'
-                      : 'Loading 3D model...'}
-              </span>
-            </div>
-          </div>
-          
-          {/* Rotation Controls - Moved to side and repositioned to prevent overlap */}
-          <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm rounded-lg p-2 shadow-md flex flex-col space-y-2 z-20">
-            <div className="flex justify-center">
-              <button 
-                onClick={handleRotateUp}
-                className="p-2 hover:bg-gray-100 rounded transition-colors"
-                title="Rotate Up"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m18 15-6-6-6 6"/>
-                </svg>
-              </button>
-            </div>
-            <div className="flex justify-between">
-              <button 
-                onClick={handleRotateLeft}
-                className="p-2 hover:bg-gray-100 rounded transition-colors"
-                title="Rotate Left"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m15 18-6-6 6-6"/>
-                </svg>
-              </button>
-              <button 
-                onClick={handleReset}
-                className="p-2 hover:bg-gray-100 rounded transition-colors"
-                title="Reset View"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 2v6h6"></path>
-                  <path d="M21 12A9 9 0 0 0 3.86 8.14"></path>
-                  <path d="M21 22v-6h-6"></path>
-                  <path d="M3 12a9 9 0 0 0 17.14 3.86"></path>
-                </svg>
-              </button>
-              <button 
-                onClick={handleRotateRight}
-                className="p-2 hover:bg-gray-100 rounded transition-colors"
-                title="Rotate Right"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m9 18 6-6-6-6"/>
-                </svg>
-              </button>
-            </div>
-            <div className="flex justify-center">
-              <button 
-                onClick={handleRotateDown}
-                className="p-2 hover:bg-gray-100 rounded transition-colors"
-                title="Rotate Down"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="m6 9 6 6 6-6"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-          
-          {/* Mouse Controls Help - Moved to bottom-right to prevent overlap */}
-          <div className="absolute bottom-4 left-4 text-xs text-gray-500 bg-white/80 backdrop-blur-sm p-2 rounded-lg shadow-sm">
-            <div className="flex flex-col space-y-1">
-              <div className="flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
-                  <path d="M12 5v14M18 13l-6 6-6-6"/>
-                </svg>
-                <span>Drag: Rotate</span>
-              </div>
-              <div className="flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
-                  <circle cx="12" cy="12" r="10"/>
-                  <path d="M8 12h8"/>
-                </svg>
-                <span>Scroll: Zoom</span>
-              </div>
-              <div className="flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
-                  <path d="M15 3h6v6M14 10l6.1-6.1M9 21H3v-6M10 14l-6.1 6.1"/>
-                </svg>
-                <span>Click: Toggle Auto-Rotate</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        
         {/* Product Configurator */}
-        <div className="flex flex-col justify-between lg:col-span-3">
+        <div className="flex flex-col justify-between lg:col-span-2">
           {selectedJewelry ? (
             <>
               <div>
@@ -2193,6 +1785,26 @@ export default function CustomizerPage() {
                     </button>
                   </div>
                 </div>
+                
+                {/* Developer Options - Only show when a jewelry item is selected */}
+                {selectedJewelry && (
+                  <div className="mb-8">
+                    <label className="text-sm text-gray-500 block mb-2">Developer Options</label>
+                    <div className="flex items-center">
+                      <button 
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${showBaseShape ? 'bg-gray-900' : 'bg-gray-200'}`}
+                        onClick={() => setShowBaseShape(!showBaseShape)}
+                        aria-pressed={showBaseShape}
+                        type="button"
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${showBaseShape ? 'translate-x-6' : 'translate-x-1'}`}
+                        />
+                      </button>
+                      <span className="ml-2 text-sm text-gray-700">Show Base Shape</span>
+                    </div>
+                  </div>
+                )}
               </div>
               
               {/* Highlight AI-generated content */}
@@ -2234,6 +1846,31 @@ export default function CustomizerPage() {
               >
                 Start Searching
               </button>
+            </div>
+          )}
+        </div>
+        
+        {/* 3D Viewer */}
+        <div className="lg:col-span-3">
+          <h2 className="text-lg font-medium mb-4">3D Preview</h2>
+          
+          {/* Showing loading state or not selected state */}
+          {isLoading ? (
+            <div className="bg-blue-50 border border-blue-200 text-blue-600 p-4 rounded-md text-center min-h-[400px] flex flex-col items-center justify-center">
+              <div className="h-8 w-8 border-4 border-blue-300 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+              <p>Generating "{aiGeneratedName}"... {generationProgress}%</p>
+            </div>
+          ) : !selectedJewelry ? (
+            <div className="bg-gray-50 border border-gray-200 text-gray-500 p-4 rounded-md text-center min-h-[400px] flex flex-col items-center justify-center">
+              <Search className="h-8 w-8 text-gray-300 mb-4" />
+              <p>Search for jewelry or generate with AI to preview in 3D</p>
+            </div>
+          ) : (
+            <div className="relative min-h-[500px] border border-gray-200 rounded-lg overflow-hidden">
+              <JewelryViewer 
+                stlUrl={selectedJewelry.stlPath === aiGeneratedModel && generatedStlUrl ? generatedStlUrl : selectedJewelry.stlPath}
+                readOnly={false}
+              />
             </div>
           )}
         </div>

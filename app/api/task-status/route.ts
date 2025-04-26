@@ -182,7 +182,7 @@ async function handleTaskStatus(request: NextRequest) {
           // console.error(`❌ [task-status] Error constructing model URL from renderedImage:`, e);
         }
       }
-      
+
       if (!finalModelUrl && !baseModelUrl) {
         // console.warn(`⚠️ [task-status] No model URLs found in task output:`, taskData.output);
       } else {
