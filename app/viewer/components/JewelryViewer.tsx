@@ -97,15 +97,25 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
     setLoadError(null);
     
     try {
+      console.log("Loading STL from URL:", url);
+      
+      // Validate URL format
+      if (!url || typeof url !== 'string') {
+        throw new Error(`Invalid STL URL: ${url}`);
+      }
+      
       const response = await fetch(url);
       if (!response.ok) {
-        throw new Error(`Failed to load STL: ${response.statusText}`);
+        throw new Error(`Failed to load STL: ${response.status} ${response.statusText}`);
       }
       
       const arrayBuffer = await response.arrayBuffer();
+      console.log("STL data fetched, size:", Math.round(arrayBuffer.byteLength / 1024), "KB");
       
       const loader = new STLLoader();
       const geometry = loader.parse(arrayBuffer);
+      
+      console.log("STL parsed successfully:", geometry);
       
       // Center the geometry
       geometry.center();
@@ -117,6 +127,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
       const scale = 10 / maxDimension; // Scale to a reasonable size
       geometry.scale(scale, scale, scale);
       
+      console.log("STL processed, applying to scene");
       setImportedMesh(geometry);
     } catch (error) {
       console.error("Error loading STL from URL:", error);
