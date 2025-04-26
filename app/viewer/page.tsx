@@ -1,11 +1,13 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import JewelryViewer from './components/JewelryViewer'
+import { Button } from '@/components/ui/button'
+import { ArrowLeft } from 'lucide-react'
+import { getUserModelById } from '@/lib/firebase/models/stlModels'
 
-// Separate component that uses searchParams to avoid hydration issues
-function ViewerContent() {
+export default function ViewerPage() {
   const searchParams = useSearchParams()
   const [stlUrl, setStlUrl] = useState<string | undefined>(undefined)
   const [loading, setLoading] = useState(true)
@@ -15,11 +17,25 @@ function ViewerContent() {
       setLoading(true)
       
       // Check if a model was selected from the library
-      if (typeof window !== 'undefined') {
-        const savedUrl = localStorage.getItem('selectedModelUrl')
-        if (savedUrl) {
-          setStlUrl(savedUrl)
-          localStorage.removeItem('selectedModelUrl')
+      const savedUrl = localStorage.getItem('selectedModelUrl')
+      if (savedUrl) {
+        setStlUrl(savedUrl)
+        // Clear the storage so it doesn't persist unnecessarily
+        localStorage.removeItem('selectedModelUrl')
+        setLoading(false)
+        return
+      }
+      
+      // Check if a specific model ID was provided in the URL
+      const modelId = searchParams.get('modelId')
+      if (modelId) {
+        try {
+          const model = await getUserModelById(modelId)
+          if (model && model.stlFileUrl) {
+            setStlUrl(model.stlFileUrl)
+          }
+        } catch (err) {
+          console.error('Error loading model:', err)
         }
       }
       
@@ -32,24 +48,17 @@ function ViewerContent() {
   return (
     <div className="container mx-auto py-6">
       <div className="mb-4">
-        <button 
+        <Button 
+          variant="outline" 
           onClick={() => window.history.back()}
-          className="flex items-center px-4 py-2 border border-gray-300 rounded"
+          className="flex items-center"
         >
+          <ArrowLeft className="w-4 h-4 mr-2" />
           Back
-        </button>
+        </Button>
       </div>
       
       <JewelryViewer stlUrl={stlUrl} />
     </div>
-  )
-}
-
-// Main page component with Suspense boundary
-export default function ViewerPage() {
-  return (
-    <Suspense fallback={<div className="container mx-auto py-6">Loading viewer...</div>}>
-      <ViewerContent />
-    </Suspense>
   )
 } 

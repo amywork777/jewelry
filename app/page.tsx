@@ -1,4 +1,4 @@
-import JewelryPage from "./components/jewelry-page"
+import JewelryPage from "../jewelry-page"
 
 export default function Page() {
   return <JewelryPage />

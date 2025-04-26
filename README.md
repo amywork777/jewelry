@@ -40,20 +40,6 @@ npm run dev
 Required environment variables:
 
 - `TRIPO_API_KEY`: API key for the Tripo3D service
-- `OPENAI_API_KEY`: API key for OpenAI (needed for image analysis features)
-
-## Deploying to Vercel
-
-When deploying to Vercel, you need to set up the required environment variables in the Vercel dashboard:
-
-1. Go to your project in the Vercel dashboard
-2. Navigate to "Settings" > "Environment Variables"
-3. Add the following variables:
-   - `OPENAI_API_KEY`: Your OpenAI API key
-   - `TRIPO_API_KEY`: Your Tripo3D API key
-4. Deploy your project
-
-Without these environment variables properly set, certain features like AI-generated designs and image analysis will not work correctly.
 
 ## Usage
 
