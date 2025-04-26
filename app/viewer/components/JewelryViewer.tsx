@@ -156,7 +156,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
   const handleAddToCart = () => {
     // This would integrate with your shopping cart functionality
     const itemDetails = {
-      type: baseJewelryType,
+      type: baseJewelryType || 'charm', // Default to 'charm' if no base type is selected
       length: baseJewelryType === 'necklace' ? defaultNecklaceLength : 0, 
       thickness: defaultChainThickness,
       hasCharm: !!importedMesh,
@@ -167,7 +167,16 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
       }
     }
     
-    alert(`Added to cart: ${baseJewelryType === 'necklace' ? 'Necklace' : 'Charm only'}!`)
+    // Determine what's being added to cart
+    let itemDescription = "Charm only";
+    if (baseJewelryType === 'necklace') {
+      itemDescription = "Necklace";
+    }
+    if (!importedMesh) {
+      itemDescription += " (no charm design selected)";
+    }
+    
+    alert(`Added to cart: ${itemDescription}!`)
     console.log("Added to cart:", itemDetails)
   }
   
@@ -769,16 +778,15 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
               </div>
               
               {/* Action Buttons - added back (both mobile and desktop) */}
-              {importedMesh && (
-                <div className="pt-1 space-y-2">
-                  <Button 
-                    onClick={handleAddToCart}
-                    className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                    disabled={!importedMesh || baseJewelryType === 'none'}
-                  >
-                    Add to Cart
-                  </Button>
-                  
+              <div className="pt-1 space-y-2">
+                <Button 
+                  onClick={handleAddToCart}
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                >
+                  Add to Cart
+                </Button>
+                
+                {importedMesh && (
                   <Button 
                     onClick={exportSTL} 
                     variant="outline" 
@@ -786,8 +794,8 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                   >
                     Export Charm
                   </Button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -6,7 +6,11 @@
 import { ModelGenerator } from "../temp-magicai/components/model-generator"
 import { useEffect, useRef } from "react"
 
-export function CustomModelGenerator() {
+interface CustomModelGeneratorProps {
+  onStlGenerated?: (stlUrl: string) => void;
+}
+
+export function CustomModelGenerator({ onStlGenerated }: CustomModelGeneratorProps) {
   const originalComponentRef = useRef<HTMLDivElement>(null);
 
   // Function to fix layout issues and remove unwanted content
@@ -185,11 +189,22 @@ export function CustomModelGenerator() {
       subtree: true 
     });
 
+    // Set up listener for the STL URL
+    const handleStlGenerated = (event: Event) => {
+      if (event instanceof CustomEvent && event.detail?.stlUrl) {
+        onStlGenerated?.(event.detail.stlUrl);
+      }
+    };
+
+    // Listen for STL URL custom event
+    document.addEventListener('stlGenerated', handleStlGenerated);
+
     return () => {
       clearTimeout(timeoutId);
       observer.disconnect();
+      document.removeEventListener('stlGenerated', handleStlGenerated);
     };
-  }, []);
+  }, [onStlGenerated]);
 
   return (
     <div ref={originalComponentRef}>
