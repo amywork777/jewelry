@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import JewelryViewer from './components/JewelryViewer'
 
-export default function ViewerPage() {
+// Separate component that uses searchParams to avoid hydration issues
+function ViewerContent() {
   const searchParams = useSearchParams()
   const [stlUrl, setStlUrl] = useState<string | undefined>(undefined)
   const [loading, setLoading] = useState(true)
@@ -41,5 +42,14 @@ export default function ViewerPage() {
       
       <JewelryViewer stlUrl={stlUrl} />
     </div>
+  )
+}
+
+// Main page component with Suspense boundary
+export default function ViewerPage() {
+  return (
+    <Suspense fallback={<div className="container mx-auto py-6">Loading viewer...</div>}>
+      <ViewerContent />
+    </Suspense>
   )
 } 
