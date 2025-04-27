@@ -16,7 +16,7 @@ import JewelryViewer from "@/app/viewer/components/JewelryViewer"
 
 type JewelryType = "ring" | "necklace" | "earrings" | "bracelet" | "pendant" | "charm"
 type Material = "gold" | "silver" | "rosegold" | "platinum"
-type Size = "small" | "medium" | "large"
+// Size is now fixed at approximately 1 inch
 
 interface JewelryItem {
   id: number
@@ -201,7 +201,6 @@ export default function CustomizerPage() {
   const [showSearchResults, setShowSearchResults] = useState(false)
   const [selectedJewelry, setSelectedJewelry] = useState<JewelryItem | null>(null)
   const [selectedMaterial, setSelectedMaterial] = useState<Material>("gold")
-  const [selectedSize, setSelectedSize] = useState<Size>("medium")
   const [showBaseShape, setShowBaseShape] = useState(true)
   
   const [isLoading, setIsLoading] = useState(false)
@@ -555,7 +554,7 @@ export default function CustomizerPage() {
       // No jewelry selected, create simple placeholder
       createPlaceholderModel(false)
     }
-  }, [selectedJewelry, aiGeneratedModel, generatedStlUrl, selectedMaterial, selectedSize, showBaseShape])
+  }, [selectedJewelry, aiGeneratedModel, generatedStlUrl, selectedMaterial, showBaseShape])
   
   // Convert remote model to STL and load it
   const convertAndLoadSTL = async (modelUrl: string) => {
@@ -681,11 +680,6 @@ export default function CustomizerPage() {
             mesh.castShadow = true;
             mesh.receiveShadow = true;
             
-            // Apply size scaling (default to medium if not selected)
-            const sizeToUse = selectedSize || "medium";
-            const sizeScale = sizeToUse === "small" ? 0.8 : sizeToUse === "medium" ? 1.0 : 1.2;
-            mesh.scale.multiplyScalar(sizeScale);
-            
             // Remove existing model if present
             cleanupObject(modelRef.current);
             
@@ -772,9 +766,8 @@ export default function CustomizerPage() {
         });
         
         // Apply size scaling
-        const sizeToUse = selectedSize || "medium";
-        const sizeScale = sizeToUse === "small" ? 0.8 : sizeToUse === "medium" ? 1.0 : 1.2;
-        model.scale.multiplyScalar(sizeScale);
+        const sizeScale = 1.0;
+        model.scale.set(sizeScale, sizeScale, sizeScale);
         
         // Add model to scene
         if (sceneRef.current) {
@@ -1108,7 +1101,7 @@ export default function CustomizerPage() {
             modelRef.current = group as unknown as THREE.Mesh;
             
             // Apply size scaling
-            const sizeScale = selectedSize === "small" ? 0.8 : selectedSize === "medium" ? 1.0 : 1.2;
+            const sizeScale = 1.0;
             group.scale.set(sizeScale, sizeScale, sizeScale);
             
             // Reset camera to show the model
@@ -1267,7 +1260,7 @@ export default function CustomizerPage() {
     mesh.receiveShadow = true
     
     // Apply scaling based on the selected size
-    const sizeScale = selectedSize === "small" ? 0.8 : selectedSize === "medium" ? 1.0 : 1.2
+    const sizeScale = 1.0;
     mesh.scale.set(sizeScale, sizeScale, sizeScale)
     
     sceneRef.current?.add(mesh)
@@ -1304,14 +1297,6 @@ export default function CustomizerPage() {
       }
     }
   }, [selectedMaterial, selectedJewelry?.type, materials]);
-  
-  // Update size when selectedSize changes
-  useEffect(() => {
-    if (modelRef.current) {
-      const sizeScale = selectedSize === "small" ? 0.8 : selectedSize === "medium" ? 1.0 : 1.2
-      modelRef.current.scale.set(sizeScale, sizeScale, sizeScale)
-    }
-  }, [selectedSize])
   
   // Handle window resize
   useEffect(() => {
@@ -1463,7 +1448,7 @@ export default function CustomizerPage() {
   
   const handleAddToCart = () => {
     if (selectedJewelry) {
-      alert(`Added to cart: ${selectedJewelry.name} (${selectedMaterial}, ${selectedSize}) - $${selectedJewelry.price}`)
+      alert(`Added to cart: ${selectedJewelry.name} (${selectedMaterial}) - $${selectedJewelry.price}`)
     }
   }
 
@@ -1757,31 +1742,6 @@ export default function CustomizerPage() {
                     >
                       <span className="h-3 w-3 rounded-full bg-gray-100 border border-gray-300 mr-1.5"></span>
                       Platinum
-                    </button>
-                  </div>
-                </div>
-                
-                {/* Size Selector */}
-                <div className="mb-8">
-                  <label className="text-sm text-gray-500 block mb-2">Size</label>
-                  <div className="flex flex-wrap gap-2">
-                    <button 
-                      className={`px-3 py-1.5 rounded-full text-sm ${selectedSize === "small" ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'}`}
-                      onClick={() => setSelectedSize("small")}
-                    >
-                      Small
-                    </button>
-                    <button 
-                      className={`px-3 py-1.5 rounded-full text-sm ${selectedSize === "medium" ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'}`}
-                      onClick={() => setSelectedSize("medium")}
-                    >
-                      Medium
-                    </button>
-                    <button 
-                      className={`px-3 py-1.5 rounded-full text-sm ${selectedSize === "large" ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'}`}
-                      onClick={() => setSelectedSize("large")}
-                    >
-                      Large
                     </button>
                   </div>
                 </div>

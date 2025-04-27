@@ -21,8 +21,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 
 type JewelryBaseType = 'necklace' | 'none'
 
-type CharmSize = 'small' | 'medium' | 'large'
-
 interface JewelryViewerProps {
   stlUrl?: string;
   readOnly?: boolean;
@@ -41,8 +39,8 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
   const defaultNecklaceLength = 450
   const defaultChainThickness = 0.8
   
-  // Charm parameters
-  const [charmSize, setCharmSize] = useState<CharmSize>('medium')
+  // Fixed charm size (approximately 1 inch / 25.4mm)
+  const fixedCharmScale = 1.0;
   
   // Material options
   const [materialType, setMaterialType] = useState<'gold' | 'silver' | 'rose-gold'>('gold')
@@ -72,15 +70,6 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
   const [attachmentPositionX, setAttachmentPositionX] = useState(0)
   const [attachmentPositionY, setAttachmentPositionY] = useState(0)
   const [attachmentPositionZ, setAttachmentPositionZ] = useState(0)
-  
-  // Get scale factor based on selected size
-  const getCharmScale = (): number => {
-    switch(charmSize) {
-      case 'small': return 0.5;
-      case 'large': return 1.5;
-      default: return 1.0; // medium
-    }
-  }
   
   // Scene reference for exporting
   const sceneRef = useRef<THREE.Group>(null)
@@ -160,7 +149,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
       length: baseJewelryType === 'necklace' ? defaultNecklaceLength : 0, 
       thickness: defaultChainThickness,
       hasCharm: !!importedMesh,
-      charmSize: charmSize,
+      charmSize: 'medium',
       attachments: {
         hasRing: showAttachmentRing,
         hasExtender: showExtensionBar
@@ -228,7 +217,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                         charmRotateY * Math.PI / 180,
                         charmRotateZ * Math.PI / 180
                       ]}
-                      scale={getCharmScale()}
+                      scale={fixedCharmScale}
                     >
                       <primitive object={importedMesh} attach="geometry" />
                       <meshStandardMaterial
@@ -248,7 +237,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                         attachmentRotateY * Math.PI / 180,
                         0
                       ]}
-                      scale={getCharmScale() * fixedAttachmentScale}
+                      scale={fixedCharmScale * fixedAttachmentScale}
                     >
                       {/* Extension bar */}
                       {showExtensionBar && (
@@ -362,24 +351,6 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                                 <div className="w-4 h-4 rounded-full" style={{ backgroundColor: materialProperties['rose-gold'].color }}></div>
                                 <SelectItem value="rose-gold">Rose Gold</SelectItem>
                               </div>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        
-                        {/* Size */}
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-gray-700">Size</Label>
-                          <Select 
-                            value={charmSize}
-                            onValueChange={(value) => setCharmSize(value as CharmSize)}
-                          >
-                            <SelectTrigger className="w-full border-gray-300 bg-white">
-                              <SelectValue placeholder="Select size" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="small">Small (0.5 inch / 12.7mm)</SelectItem>
-                              <SelectItem value="medium">Medium (1 inch / 25.4mm)</SelectItem>
-                              <SelectItem value="large">Large (1.5 inch / 38.1mm)</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -572,24 +543,6 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                                   <div className="w-4 h-4 rounded-full" style={{ backgroundColor: materialProperties['rose-gold'].color }}></div>
                                   <SelectItem value="rose-gold">Rose Gold</SelectItem>
                                 </div>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          {/* Charm Size - Changed to dropdown with dimensions */}
-                          <div className="space-y-2 mt-3">
-                            <Label className="text-sm font-medium text-gray-700">Size</Label>
-                            <Select 
-                              value={charmSize}
-                              onValueChange={(value) => setCharmSize(value as CharmSize)}
-                            >
-                              <SelectTrigger className="w-full border-gray-300 bg-white">
-                                <SelectValue placeholder="Select size" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="small">Small (0.5 inch / 12.7mm)</SelectItem>
-                                <SelectItem value="medium">Medium (1 inch / 25.4mm)</SelectItem>
-                                <SelectItem value="large">Large (1.5 inch / 38.1mm)</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -820,22 +773,6 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                       </SelectContent>
                     </Select>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Select 
-                      value={charmSize}
-                      onValueChange={(value) => setCharmSize(value as CharmSize)}
-                    >
-                      <SelectTrigger className="w-full border-gray-300 bg-white">
-                        <SelectValue placeholder="Select size" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="small">Small (0.5 inch / 12.7mm)</SelectItem>
-                        <SelectItem value="medium">Medium (1 inch / 25.4mm)</SelectItem>
-                        <SelectItem value="large">Large (1.5 inch / 38.1mm)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </TabsContent>
                 
                 <TabsContent value="rotation" className="space-y-3">
@@ -881,23 +818,6 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                       <div className="w-3 h-3 rounded-full" style={{ backgroundColor: materialProperties['rose-gold'].color }}></div>
                       <SelectItem value="rose-gold">Rose Gold</SelectItem>
                     </div>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="bg-white rounded-md border border-gray-200 p-3 shadow-sm">
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Size</h3>
-                <Select 
-                  value={charmSize}
-                  onValueChange={(value) => setCharmSize(value as CharmSize)}
-                >
-                  <SelectTrigger className="w-full border-gray-300 bg-white">
-                    <SelectValue placeholder="Select size" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="small">Small (0.5 inch / 12.7mm)</SelectItem>
-                    <SelectItem value="medium">Medium (1 inch / 25.4mm)</SelectItem>
-                    <SelectItem value="large">Large (1.5 inch / 38.1mm)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
