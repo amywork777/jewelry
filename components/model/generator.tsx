@@ -105,6 +105,9 @@ export function ModelGenerator() {
     usageCount?: number;
   }>({});
 
+  const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false)
+  const [enhancedPrompt, setEnhancedPrompt] = useState<string | null>(null)
+
   // Listen for configuration messages from parent window
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -206,9 +209,8 @@ export function ModelGenerator() {
     setTextPrompt("");
     setSelectedFile(null);
     setPreviewUrl(null);
-    setImageTextPrompt("");
-    setSelectedImageTextFile(null);
-    setPreviewImageTextUrl(null);
+    setIsEnhancingPrompt(false);
+    setEnhancedPrompt(null);
     setStatus("idle");
     setModelUrl(null);
     setTaskId(null);
@@ -254,8 +256,7 @@ export function ModelGenerator() {
 
   // Define canGenerate for the original image submission
   const canGenerate = (inputType === "text" && textPrompt.trim().length > 0) || 
-                     (inputType === "image" && selectedFile !== null) ||
-                     (inputType === "image-text" && selectedImageTextFile !== null)
+                     (inputType === "image" && selectedFile !== null)
 
   const onDropImageText = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0]
@@ -391,6 +392,63 @@ export function ModelGenerator() {
     }
   };
 
+  // Function to enhance text prompt with ChatGPT to ensure one object and 3D printability
+  const enhanceTextPrompt = async (prompt: string): Promise<string> => {
+    setIsEnhancingPrompt(true)
+    try {
+      const response = await fetch("/api/enhance-prompt", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt,
+          type: "text"
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to enhance prompt")
+      }
+
+      const data = await response.json()
+      return data.enhancedPrompt
+    } catch (error) {
+      console.error("Error enhancing prompt:", error)
+      // If enhancement fails, still use the original prompt but with some basic fixes
+      return `${prompt} (design as a single object with minimum thickness of 0.8mm-1mm, avoiding ultra-thin sections and fine details)`;
+    } finally {
+      setIsEnhancingPrompt(false)
+    }
+  }
+
+  // Function to analyze and enhance image-based prompts with ChatGPT Vision
+  const enhanceImagePrompt = async (imageFile: File): Promise<string> => {
+    setIsEnhancingPrompt(true)
+    try {
+      const formData = new FormData()
+      formData.append("image", imageFile)
+
+      const response = await fetch("/api/analyze-image-for-prompt", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to analyze image")
+      }
+
+      const data = await response.json()
+      return data.enhancedPrompt || "Create a single 3D model based on this image with minimum thickness of 0.8mm-1mm, avoiding ultra-thin sections and fine details";
+    } catch (error) {
+      console.error("Error analyzing image:", error)
+      // Fallback prompt if analysis fails
+      return "Create a single 3D model based on this image with minimum thickness of 0.8mm-1mm, avoiding ultra-thin sections and fine details";
+    } finally {
+      setIsEnhancingPrompt(false)
+    }
+  }
+
   const handleTextSubmit = async () => {
     if (!textPrompt.trim()) {
       toast({
@@ -407,10 +465,25 @@ export function ModelGenerator() {
     // Notify parent about generation initiation
     notifyParentAboutGeneration();
     
-    setStatus("uploading")
-    setProgress(0)
+    // Enhance the prompt first
+    setIsEnhancingPrompt(true)
+    toast({
+      title: "Enhancing Prompt",
+      description: "Optimizing your prompt for better 3D model creation...",
+    })
     
     try {
+      const optimizedPrompt = await enhanceTextPrompt(textPrompt)
+      setEnhancedPrompt(optimizedPrompt)
+      
+      toast({
+        title: "Prompt Enhanced",
+        description: "Creating your 3D model with optimized instructions for manufacturability...",
+      })
+      
+      setStatus("uploading")
+      setProgress(0)
+      
       setStatus("generating")
       setProgress(0)
       setIsGenerating(true)
@@ -418,7 +491,7 @@ export function ModelGenerator() {
       setStlBlob(null)
       setStlUrl(null)
 
-      // Call the API to start text-to-model generation
+      // Call the API to start text-to-model generation with enhanced prompt
       const response = await fetch("/api/generate-model", {
         method: "POST",
         headers: {
@@ -426,7 +499,7 @@ export function ModelGenerator() {
         },
         body: JSON.stringify({
           type: "text",
-          prompt: textPrompt,
+          prompt: optimizedPrompt,
         }),
       })
 
@@ -443,6 +516,7 @@ export function ModelGenerator() {
       console.error("Error generating model:", error)
       setStatus("error")
       setIsGenerating(false)
+      setIsEnhancingPrompt(false)
       toast({
         title: "Error",
         description: "Failed to generate model. Please try again.",
@@ -467,17 +541,25 @@ export function ModelGenerator() {
     // Notify parent about generation initiation
     notifyParentAboutGeneration();
     
-    setStatus("uploading")
-    setProgress(0)
+    // First analyze the image to get an enhanced prompt
+    toast({
+      title: "Analyzing Image",
+      description: "Identifying the object and optimizing for better 3D model creation...",
+    })
     
     try {
-      setStatus("generating")
+      // Get enhanced prompt from image analysis
+      const optimizedPrompt = await enhanceImagePrompt(selectedFile)
+      setEnhancedPrompt(optimizedPrompt)
+      
+      toast({
+        title: "Image Analyzed",
+        description: "Creating a 3D model suitable for manufacturability...",
+      })
+      
+      setStatus("uploading")
       setProgress(0)
-      setIsGenerating(true)
-      // Reset STL state when generating a new model
-      setStlBlob(null)
-      setStlUrl(null)
-
+      
       // First upload the image
       const formData = new FormData()
       formData.append("file", selectedFile)
@@ -493,7 +575,7 @@ export function ModelGenerator() {
 
       const uploadData = await uploadResponse.json()
 
-      // Then start the image-to-model generation
+      // Then start the generation with both image and enhanced prompt
       setStatus("generating")
       const response = await fetch("/api/generate-model", {
         method: "POST",
@@ -503,6 +585,7 @@ export function ModelGenerator() {
         body: JSON.stringify({
           type: "image",
           imageToken: uploadData.imageToken,
+          prompt: optimizedPrompt, // Add the enhanced prompt to guide the image-based generation
         }),
       })
 
@@ -519,6 +602,7 @@ export function ModelGenerator() {
       console.error("Error generating model:", error)
       setStatus("error")
       setIsGenerating(false)
+      setIsEnhancingPrompt(false)
       toast({
         title: "Error",
         description: "Failed to generate model. Please try again.",
@@ -1295,7 +1379,7 @@ export function ModelGenerator() {
                     placeholder="Describe your 3D model in detail (e.g., a blue dolphin with a curved fin, swimming)"
                     value={textPrompt}
                     onChange={(e) => setTextPrompt(e.target.value)}
-                    disabled={isGenerating}
+                    disabled={isGenerating || isEnhancingPrompt}
                     className="min-h-[100px] sm:min-h-[120px] pr-10 text-sm sm:text-base"
                   />
                   <Button
@@ -1304,7 +1388,7 @@ export function ModelGenerator() {
                     variant="ghost"
                     className="absolute right-2 top-2"
                     onClick={toggleVoiceRecording}
-                    disabled={isGenerating}
+                    disabled={isGenerating || isEnhancingPrompt}
                   >
                     {isRecording ? (
                       <MicOff className="h-4 w-4 sm:h-5 sm:w-5 text-red-500" />
@@ -1313,15 +1397,22 @@ export function ModelGenerator() {
                     )}
                   </Button>
                 </div>
+                
+                {enhancedPrompt && !isEnhancingPrompt && status === "generating" && (
+                  <div className="mt-2 text-xs text-gray-600 bg-gray-50 p-3 rounded-md border border-gray-200">
+                    <p className="font-medium mb-1">Enhanced model design prompt:</p>
+                    <p>{enhancedPrompt}</p>
+                  </div>
+                )}
               </TabsContent>
               <TabsContent value="image" className="space-y-4">
                 <div
                   {...getRootProps()}
                   className={`border-2 border-dashed rounded-lg p-3 sm:p-4 text-center cursor-pointer transition-colors ${
                     isDragActive ? "border-primary bg-primary/10" : "border-gray-300 hover:bg-gray-50"
-                  } ${status === "uploading" || status === "generating" ? "opacity-50 cursor-not-allowed" : ""}`}
+                  } ${status === "uploading" || status === "generating" || isEnhancingPrompt ? "opacity-50 cursor-not-allowed" : ""}`}
                 >
-                  <input {...getInputProps()} />
+                  <input {...getInputProps()} disabled={status === "uploading" || status === "generating" || isEnhancingPrompt} />
                   {previewUrl ? (
                     <div className="flex flex-col items-center gap-2">
                       <img
@@ -1338,8 +1429,10 @@ export function ModelGenerator() {
                             e.stopPropagation();
                             setSelectedFile(null);
                             setPreviewUrl(null);
+                            setEnhancedPrompt(null);
                           }}
                           className="text-xs sm:text-sm h-7 sm:h-9 px-2 sm:px-3"
+                          disabled={status === "uploading" || status === "generating" || isEnhancingPrompt}
                         >
                           <Repeat className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" /> Remove image
                         </Button>
@@ -1359,21 +1452,34 @@ export function ModelGenerator() {
                     </div>
                   )}
                 </div>
+
+                {enhancedPrompt && !isEnhancingPrompt && status === "generating" && (
+                  <div className="mt-2 text-xs text-gray-600 bg-gray-50 p-3 rounded-md border border-gray-200">
+                    <p className="font-medium mb-1">Enhanced model design prompt:</p>
+                    <p>{enhancedPrompt}</p>
+                  </div>
+                )}
               </TabsContent>
             </div>
 
             <div className="space-y-3 sm:space-y-4 mt-4">
               {/* Progress bars */}
-              {(status === "generating" || status === "uploading") && (
+              {(status === "generating" || status === "uploading" || isEnhancingPrompt) && (
                 <div className="space-y-2">
                   <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-primary rounded-full transition-all duration-500 ease-in-out"
-                      style={{ width: `${progress}%` }}
+                      className={`h-full rounded-full transition-all duration-500 ease-in-out ${
+                        isEnhancingPrompt ? "bg-blue-400" : "bg-primary"
+                      }`}
+                      style={{ width: isEnhancingPrompt ? "50%" : `${progress}%` }}
                     ></div>
                   </div>
                   <p className="text-center text-xs sm:text-sm text-gray-500">
-                    {status === "uploading" ? "Uploading image" : "Generating 3D model"}: {progress}%
+                    {isEnhancingPrompt 
+                      ? "Enhancing prompt with AI..." 
+                      : status === "uploading" 
+                        ? "Uploading image" 
+                        : "Generating 3D model"}: {isEnhancingPrompt ? "50" : progress}%
                   </p>
                 </div>
               )}
@@ -1473,11 +1579,19 @@ export function ModelGenerator() {
                   }
                   disabled={
                     isGenerating || 
+                    isEnhancingPrompt ||
                     (inputType === "text" && !textPrompt.trim()) ||
                     (inputType === "image" && !selectedFile)
                   }
                 >
-                  {isGenerating ? (
+                  {isEnhancingPrompt ? (
+                    <>
+                      <span className="text-xs sm:text-sm mr-2">
+                        Enhancing Prompt
+                      </span>
+                      <div className="h-3 w-3 sm:h-4 sm:w-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                    </>
+                  ) : isGenerating ? (
                     <>
                       <span className="text-xs sm:text-sm mr-2">
                         Generating
