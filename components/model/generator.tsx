@@ -67,7 +67,7 @@ declare global {
 }
 
 type ModelGenerationStatus = "idle" | "uploading" | "generating" | "completed" | "error"
-type InputType = "text" | "image" | "image-text"
+type InputType = "text" | "image"
 
 export function ModelGenerator() {
   const [inputType, setInputType] = useState<InputType>("text")
@@ -938,7 +938,7 @@ export function ModelGenerator() {
         if (window !== window.parent) {
           const modelInfo = {
             modelUrl: data.modelUrl || data.baseModelUrl,
-            prompt: inputType === "text" ? textPrompt : (inputType === "image-text" ? imageTextPrompt : "Image-based 3D model"),
+            prompt: inputType === "text" ? textPrompt : "Image-based 3D model",
             generationMethod: inputType.includes("image") ? "image-to-3d" : "text-to-3d",
             timestamp: new Date().toISOString(),
             taskId: taskId,
@@ -1280,15 +1280,12 @@ export function ModelGenerator() {
         </CardHeader>
         <CardContent className="p-3 sm:p-6">
           <Tabs defaultValue="text" className="w-full" onValueChange={(v) => setInputType(v as InputType)}>
-            <TabsList className="grid w-full grid-cols-3 mb-4">
+            <TabsList className="grid w-full grid-cols-2 mb-4">
               <TabsTrigger value="text" className="text-xs sm:text-sm py-1.5 px-2">
                 Text
               </TabsTrigger>
               <TabsTrigger value="image" className="text-xs sm:text-sm py-1.5 px-2">
                 Image
-              </TabsTrigger>
-              <TabsTrigger value="image-text" className="text-xs sm:text-sm py-1.5 px-2 font-medium">
-                AI-Enhanced
               </TabsTrigger>
             </TabsList>
             <div className="space-y-4">
@@ -1361,78 +1358,6 @@ export function ModelGenerator() {
                       </p>
                     </div>
                   )}
-                </div>
-              </TabsContent>
-              <TabsContent value="image-text" className="space-y-4">
-                <div
-                  {...getImageTextRootProps()}
-                  className={`border-2 border-dashed rounded-lg p-3 sm:p-4 text-center cursor-pointer transition-colors ${
-                    isImageTextDragActive ? "border-primary bg-primary/10" : "border-gray-300 hover:bg-gray-50"
-                  } ${status === "uploading" || status === "generating" ? "opacity-50 cursor-not-allowed" : ""}`}
-                >
-                  <input {...getImageTextInputProps()} />
-                  {previewImageTextUrl ? (
-                    <div className="flex flex-col items-center gap-2">
-                      <img
-                        src={previewImageTextUrl}
-                        alt="Preview"
-                        className="max-h-[150px] sm:max-h-[200px] max-w-full object-contain rounded-lg"
-                      />
-                      <p className="text-xs sm:text-sm text-gray-500">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedImageTextFile(null);
-                            setPreviewImageTextUrl(null);
-                          }}
-                          className="text-xs sm:text-sm h-7 sm:h-9 px-2 sm:px-3"
-                        >
-                          <Repeat className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" /> Remove image
-                        </Button>
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="py-4 sm:py-8">
-                      <div className="flex justify-center">
-                        <ImagePlus className="h-8 w-8 sm:h-10 sm:w-10 text-gray-400" />
-                      </div>
-                      <p className="mt-2 text-xs sm:text-sm font-medium">
-                        Tap to upload or drag an image
-                      </p>
-                      <p className="mt-1 text-xs text-gray-500">
-                        JPG, PNG up to 10MB
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-2 sm:mt-4">
-                  <div className="relative">
-                    <Textarea
-                      placeholder="Optional: Add text guidance (e.g., 'make it more futuristic')"
-                      value={imageTextPrompt}
-                      onChange={(e) => setImageTextPrompt(e.target.value)}
-                      disabled={isGenerating}
-                      className="min-h-[70px] sm:min-h-[100px] text-sm sm:text-base pr-10"
-                    />
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="absolute right-2 top-2"
-                      onClick={toggleImageTextVoiceRecording}
-                      disabled={isGenerating}
-                    >
-                      {isRecordingImageText ? (
-                        <MicOff className="h-4 w-4 sm:h-5 sm:w-5 text-red-500" />
-                      ) : (
-                        <Mic className="h-4 w-4 sm:h-5 sm:w-5" />
-                      )}
-                    </Button>
-                  </div>
                 </div>
               </TabsContent>
             </div>
@@ -1544,21 +1469,18 @@ export function ModelGenerator() {
                   onClick={
                     inputType === "text" 
                       ? handleTextSubmit 
-                      : inputType === "image" 
-                        ? handleImageSubmit 
-                        : handleImageTextSubmit
+                      : handleImageSubmit
                   }
                   disabled={
                     isGenerating || 
                     (inputType === "text" && !textPrompt.trim()) ||
-                    (inputType === "image" && !selectedFile) ||
-                    (inputType === "image-text" && !selectedImageTextFile)
+                    (inputType === "image" && !selectedFile)
                   }
                 >
                   {isGenerating ? (
                     <>
                       <span className="text-xs sm:text-sm mr-2">
-                        {isAnalyzingImage ? "Analyzing Image" : "Generating"}
+                        Generating
                       </span>
                       <div className="h-3 w-3 sm:h-4 sm:w-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
                     </>
