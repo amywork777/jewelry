@@ -321,10 +321,10 @@ export function ModelGenerator() {
             button.addEventListener('click', function() {
               console.log('Generate 3D Model clicked');
               
-              // Notify the parent (FISHCAD) about the generation
+              // Notify the parent about the generation
               if (window.parent !== window) {
                 window.parent.postMessage({
-                  type: 'fishcad_model_generated',
+                  type: 'model_generated',
                   timestamp: new Date().toISOString()
                 }, '*');
               }
@@ -357,7 +357,7 @@ export function ModelGenerator() {
           // Notify parent
           if (window.parent !== window) {
             window.parent.postMessage({
-              type: 'fishcad_model_generated',
+              type: 'model_generated',
               element: target.tagName,
               text: target.textContent
             }, '*');
@@ -383,7 +383,7 @@ export function ModelGenerator() {
   const notifyParentAboutGeneration = () => {
     if (window.parent !== window) {
       window.parent.postMessage({
-        type: 'fishcad_model_generated',
+        type: 'model_generated',
         source: 'magic.taiyaki.ai',
         method: inputType,
         timestamp: new Date().toISOString()
@@ -831,8 +831,8 @@ export function ModelGenerator() {
       setStlBlob(blob)
       
       // Create a URL for the STL blob
-      const blobUrl = URL.createObjectURL(blob)
-      setStlUrl(blobUrl)
+      const stlUrl = URL.createObjectURL(blob)
+      setStlUrl(stlUrl)
       
       toast({
         title: "Conversion complete",
@@ -841,7 +841,7 @@ export function ModelGenerator() {
 
       // Dispatch custom event with STL URL for parent components
       const stlGeneratedEvent = new CustomEvent('stlGenerated', {
-        detail: { stlUrl: blobUrl },
+        detail: { stlUrl: stlUrl },
         bubbles: true,
         composed: true
       });
@@ -983,40 +983,39 @@ export function ModelGenerator() {
         setProgress(100);
         setIsGenerating(false);
         
-        // Scroll to the generated model area immediately
-        setTimeout(() => {
-          const modelArea = document.getElementById('stl-model-viewer');
-          if (modelArea) {
-            modelArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
-        }, 100);
-        
-        // Automatically start STL conversion when model is ready
+        // Immediately start STL conversion (don't wait to show the model URL first)
         if (finalModelUrl) {
-          toast({
-            title: "Processing STL",
-            description: "Converting your 3D model to STL format...",
-          });
+          // Don't show the model directly, go straight to STL conversion
+          setIsConvertingStl(true);
           
-          // Start STL conversion
+          // Start STL conversion right away
           convertToStl(finalModelUrl)
             .then(blob => {
               if (blob) {
                 toast({
-                  title: "STL Ready",
-                  description: "Your model is ready to be added to FISHCAD.",
+                  title: "Model Ready",
+                  description: "Your 3D model has been created successfully.",
                 });
+                
+                // Scroll to the generated model after conversion
+                setTimeout(() => {
+                  const modelArea = document.getElementById('stl-model-viewer');
+                  if (modelArea) {
+                    modelArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }
+                }, 100);
               }
             })
             .catch(() => {
               // Error is already handled in convertToStl
             });
+        } else {
+          toast({
+            title: "Error",
+            description: "Failed to get model URL for conversion.",
+            variant: "destructive",
+          });
         }
-        
-        toast({
-          title: "Success!",
-          description: "Your 3D model has been generated successfully.",
-        });
 
         // Send generation completion message to parent window if in iframe
         if (window !== window.parent) {
@@ -1030,7 +1029,7 @@ export function ModelGenerator() {
           };
           
           window.parent.postMessage({
-            type: 'model-generated',
+            type: 'model_generated',
             source: 'magic.taiyaki.ai',
             modelInfo
           }, '*');
@@ -1118,7 +1117,7 @@ export function ModelGenerator() {
       // Create and click a download link
       const link = document.createElement('a');
       link.href = stlUrl;
-      link.download = "magicfish-generated-model.stl";
+      link.download = "3d-model.stl";
       document.body.appendChild(link);
       link.click();
       
@@ -1494,11 +1493,6 @@ export function ModelGenerator() {
                       <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
                       <p className="text-sm text-gray-600">Converting to STL format...</p>
                     </div>
-                  ) : !stlUrl && !stlBlob ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center">
-                      <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
-                      <p className="text-sm text-gray-600">Preparing 3D model...</p>
-                    </div>
                   ) : (
                     <div 
                       ref={setStlViewerRef} 
@@ -1530,30 +1524,6 @@ export function ModelGenerator() {
                       </>
                     )}
                   </Button>
-                  
-                  <div className="w-full p-3 border border-gray-200 rounded-md text-xs sm:text-sm text-gray-700 bg-gray-50">
-                    <h3 className="font-medium mb-2">How to use with FISHCAD:</h3>
-                    
-                    <div className="mb-3">
-                      <p className="font-medium">1. Download the STL File</p>
-                      <ul className="pl-4 mt-1 space-y-1 list-disc">
-                        <li>Click the download link for any STL model on our site</li>
-                        <li>Note where the file is saved (usually your Downloads folder)</li>
-                      </ul>
-                    </div>
-                    
-                    <div className="mb-2">
-                      <p className="font-medium">2. Import into FISHCAD</p>
-                      <ul className="pl-4 mt-1 space-y-1 list-disc">
-                        <li>Go to <a href="https://fishcad.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">FISHCAD.com</a></li>
-                        <li>Click the "Import" button in the top menu</li>
-                        <li>Select your downloaded STL file</li>
-                        <li>Your model will appear in your FISHCAD workspace</li>
-                      </ul>
-                    </div>
-                    
-                    <p className="mt-3 text-sm italic">That's it! You can now edit, modify, or use the model in your FISHCAD project.</p>
-                  </div>
                   
                   <Button
                     className="w-full flex items-center justify-center"
