@@ -43,7 +43,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
   const fixedCharmScale = 1.0;
   
   // Material options
-  const [materialType, setMaterialType] = useState<'gold' | 'silver' | 'rose-gold'>('gold')
+  const [materialType, setMaterialType] = useState<'gold' | 'silver'>('gold')
   
   // Charm rotation controls
   const [charmRotateX, setCharmRotateX] = useState(0)
@@ -53,8 +53,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
   // Material properties mapping
   const materialProperties = {
     'gold': { color: '#FFD700', roughness: 0.1, metalness: 0.9 },
-    'silver': { color: '#C0C0C0', roughness: 0.1, metalness: 0.9 },
-    'rose-gold': { color: '#B76E79', roughness: 0.1, metalness: 0.9 }
+    'silver': { color: '#C0C0C0', roughness: 0.1, metalness: 0.9 }
   }
   
   // Attachment options
@@ -340,7 +339,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                           <Label className="text-sm font-medium text-gray-700">Material</Label>
                           <Select 
                             value={materialType}
-                            onValueChange={(value) => setMaterialType(value as 'gold' | 'silver' | 'rose-gold')}
+                            onValueChange={(value) => setMaterialType(value as 'gold' | 'silver')}
                           >
                             <SelectTrigger className="w-full border-gray-300 bg-white">
                               <SelectValue placeholder="Select material" />
@@ -353,10 +352,6 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                               <div className="flex items-center gap-2 py-1 px-2">
                                 <div className="w-4 h-4 rounded-full" style={{ backgroundColor: materialProperties['silver'].color }}></div>
                                 <SelectItem value="silver">Silver</SelectItem>
-                              </div>
-                              <div className="flex items-center gap-2 py-1 px-2">
-                                <div className="w-4 h-4 rounded-full" style={{ backgroundColor: materialProperties['rose-gold'].color }}></div>
-                                <SelectItem value="rose-gold">Rose Gold</SelectItem>
                               </div>
                             </SelectContent>
                           </Select>
@@ -539,7 +534,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                             <Label className="text-sm font-medium text-gray-700">Material</Label>
                             <Select 
                               value={materialType}
-                              onValueChange={(value) => setMaterialType(value as 'gold' | 'silver' | 'rose-gold')}
+                              onValueChange={(value) => setMaterialType(value as 'gold' | 'silver')}
                             >
                               <SelectTrigger className="w-full border-gray-300 bg-white">
                                 <SelectValue placeholder="Select material" />
@@ -552,10 +547,6 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                                 <div className="flex items-center gap-2 py-1 px-2">
                                   <div className="w-4 h-4 rounded-full" style={{ backgroundColor: materialProperties['silver'].color }}></div>
                                   <SelectItem value="silver">Silver</SelectItem>
-                                </div>
-                                <div className="flex items-center gap-2 py-1 px-2">
-                                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: materialProperties['rose-gold'].color }}></div>
-                                  <SelectItem value="rose-gold">Rose Gold</SelectItem>
                                 </div>
                               </SelectContent>
                             </Select>
@@ -782,7 +773,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                   <div className="space-y-2">
                     <Select
                       value={materialType}
-                      onValueChange={(value) => setMaterialType(value as 'gold' | 'silver' | 'rose-gold')}
+                      onValueChange={(value) => setMaterialType(value as 'gold' | 'silver')}
                     >
                       <SelectTrigger className="w-full border-gray-300 bg-white">
                         <SelectValue placeholder="Select material" />
@@ -790,7 +781,6 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                       <SelectContent>
                         <SelectItem value="gold">Gold</SelectItem>
                         <SelectItem value="silver">Silver</SelectItem>
-                        <SelectItem value="rose-gold">Rose Gold</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -830,7 +820,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                 <h3 className="text-sm font-medium text-gray-700 mb-2">Material</h3>
                 <Select 
                   value={materialType}
-                  onValueChange={(value) => setMaterialType(value as 'gold' | 'silver' | 'rose-gold')}
+                  onValueChange={(value) => setMaterialType(value as 'gold' | 'silver')}
                 >
                   <SelectTrigger className="w-full border-gray-300 bg-white">
                     <SelectValue placeholder="Select material" />
@@ -843,10 +833,6 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                     <div className="flex items-center gap-2 py-1 px-2">
                       <div className="w-3 h-3 rounded-full" style={{ backgroundColor: materialProperties['silver'].color }}></div>
                       <SelectItem value="silver">Silver</SelectItem>
-                    </div>
-                    <div className="flex items-center gap-2 py-1 px-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: materialProperties['rose-gold'].color }}></div>
-                      <SelectItem value="rose-gold">Rose Gold</SelectItem>
                     </div>
                   </SelectContent>
                 </Select>
