@@ -758,7 +758,8 @@ export function ModelGenerator() {
       // Dispatch custom event with STL URL for parent components
       const stlGeneratedEvent = new CustomEvent('stlGenerated', {
         detail: { stlUrl: blobUrl },
-        bubbles: true
+        bubbles: true,
+        composed: true
       });
       document.dispatchEvent(stlGeneratedEvent);
       
@@ -897,6 +898,14 @@ export function ModelGenerator() {
         setModelUrl(finalModelUrl);
         setProgress(100);
         setIsGenerating(false);
+        
+        // Scroll to the generated model area immediately
+        setTimeout(() => {
+          const modelArea = document.getElementById('stl-model-viewer');
+          if (modelArea) {
+            modelArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 100);
         
         // Automatically start STL conversion when model is ready
         if (finalModelUrl) {
@@ -1446,7 +1455,9 @@ export function ModelGenerator() {
 
               {/* STL Viewer */}
               {status === "completed" && (
-                <div className="my-2 sm:mb-4 bg-gray-100 rounded-lg overflow-hidden border" style={{ height: "180px", minHeight: "180px" }}>
+                <div className="my-2 sm:mb-4 bg-gray-100 rounded-lg overflow-hidden border" 
+                     style={{ height: "180px", minHeight: "180px" }}
+                     id="stl-model-viewer">
                   {isConvertingStl ? (
                     <div className="w-full h-full flex flex-col items-center justify-center">
                       <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>

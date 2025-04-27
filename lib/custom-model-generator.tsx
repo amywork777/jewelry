@@ -9,6 +9,34 @@ import { useEffect, useRef } from "react"
 export function CustomModelGenerator() {
   const originalComponentRef = useRef<HTMLDivElement>(null);
 
+  // Listen for the stlGenerated event to scroll to the model
+  useEffect(() => {
+    const handleStlGenerated = () => {
+      // Wait a bit for the UI to update
+      setTimeout(() => {
+        // Find the STL viewer element by ID
+        const stlViewer = document.getElementById('stl-model-viewer');
+        if (stlViewer) {
+          stlViewer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          // Fallback to class selector if ID is not found
+          const fallbackViewer = document.querySelector('[class*="bg-gray-100 rounded-lg overflow-hidden border"]');
+          if (fallbackViewer) {
+            fallbackViewer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }
+      }, 500);
+    };
+
+    // Add event listener
+    document.addEventListener('stlGenerated', handleStlGenerated);
+    
+    // Clean up
+    return () => {
+      document.removeEventListener('stlGenerated', handleStlGenerated);
+    };
+  }, []);
+
   // Function to fix layout issues and remove unwanted content
   useEffect(() => {
     if (!originalComponentRef.current) return;
