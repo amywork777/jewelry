@@ -3,7 +3,7 @@
 // This is a customized version of the model-generator component
 // Based on the original ModelGenerator from magicai
 
-import { ModelGenerator } from "../temp-magicai/components/model-generator"
+import { ModelGenerator } from "../components/model/generator"
 import { useEffect, useRef } from "react"
 
 export function CustomModelGenerator() {
