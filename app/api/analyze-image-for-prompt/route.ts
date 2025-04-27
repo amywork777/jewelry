@@ -7,12 +7,41 @@ const openai = new OpenAI({
 
 export async function POST(req: NextRequest) {
   try {
+    console.log("📷 [analyze-image-for-prompt] Processing incoming image analysis request");
+    
     const formData = await req.formData();
     const imageFile = formData.get("image") as File | null;
 
     if (!imageFile) {
+      console.error("❌ [analyze-image-for-prompt] No image file provided in request");
       return NextResponse.json(
         { error: "Image file is required" },
+        { status: 400 }
+      );
+    }
+
+    console.log(`📷 [analyze-image-for-prompt] Received image: ${imageFile.name}, type: ${imageFile.type}, size: ${Math.round(imageFile.size / 1024)}KB`);
+
+    // Validate image type
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(imageFile.type)) {
+      console.error(`❌ [analyze-image-for-prompt] Unsupported image type: ${imageFile.type}`);
+      return NextResponse.json(
+        { 
+          error: "Unsupported image type. Please use JPEG, PNG, or WebP",
+          enhancedPrompt: "Create a single 3D model with minimum thickness of 0.8mm-1mm, avoiding ultra-thin sections and fine details" 
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate image size (max 10MB)
+    if (imageFile.size > 10 * 1024 * 1024) {
+      console.error(`❌ [analyze-image-for-prompt] Image too large: ${Math.round(imageFile.size / 1024 / 1024)}MB`);
+      return NextResponse.json(
+        { 
+          error: "Image too large. Maximum size is 10MB", 
+          enhancedPrompt: "Create a single 3D model with minimum thickness of 0.8mm-1mm, avoiding ultra-thin sections and fine details"
+        },
         { status: 400 }
       );
     }
@@ -21,7 +50,10 @@ export async function POST(req: NextRequest) {
     const bytes = await imageFile.arrayBuffer();
     const buffer = Buffer.from(bytes);
     const base64Image = buffer.toString("base64");
+    console.log(`📷 [analyze-image-for-prompt] Converted image to base64, length: ${Math.round(base64Image.length / 1024)}KB`);
 
+    console.log(`📷 [analyze-image-for-prompt] Calling OpenAI Vision API with model: gpt-4o`);
+    
     // Vision API call to analyze the image
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -44,7 +76,8 @@ export async function POST(req: NextRequest) {
               3. Include details about minimum thickness (0.8mm-1mm) and avoiding ultra-thin sections.
               4. Specify that the design should avoid ultra-fine details to maintain clarity.
               5. Do NOT include any explanations, just provide the prompt text itself.
-              6. Start with "Create a single 3D model..." and provide a detailed description.`
+              6. Start with "Create a single 3D model..." and provide a detailed description.
+              7. If you can't determine what's in the image or the image appears unsuitable, just respond with "Create a single 3D model based on this image with minimum thickness of 0.8mm-1mm, avoiding ultra-thin sections and fine details."`
             },
             {
               type: "image_url",
@@ -60,16 +93,33 @@ export async function POST(req: NextRequest) {
 
     const enhancedPrompt = response.choices[0].message.content?.trim() || 
       "Create a single 3D model based on this image with minimum thickness of 0.8mm-1mm, avoiding ultra-thin sections and fine details";
+    
+    console.log(`✅ [analyze-image-for-prompt] Successfully generated prompt: "${enhancedPrompt.substring(0, 100)}${enhancedPrompt.length > 100 ? '...' : ''}"`);
 
     return NextResponse.json({
       enhancedPrompt,
     });
-  } catch (error) {
-    console.error("Error analyzing image:", error);
+  } catch (error: any) {
+    console.error("❌ [analyze-image-for-prompt] Error analyzing image:", error);
+    
+    // Provide more specific error messages based on common API errors
+    let errorMessage = "Failed to analyze image";
+    let fallbackPrompt = "Create a single 3D model based on this image with minimum thickness of 0.8mm-1mm, avoiding ultra-thin sections and fine details";
+    
+    if (error.status === 429) {
+      errorMessage = "Rate limit exceeded. Please try again later.";
+    } else if (error.status === 400) {
+      errorMessage = "Invalid request to image analysis API.";
+    } else if (error.status === 401) {
+      errorMessage = "Authentication error with image analysis API.";
+    }
+    
+    console.log(`⚠️ [analyze-image-for-prompt] Returning fallback prompt due to error: ${errorMessage}`);
+    
     return NextResponse.json(
       { 
-        error: "Failed to analyze image",
-        enhancedPrompt: "Create a single 3D model based on this image with minimum thickness of 0.8mm-1mm, avoiding ultra-thin sections and fine details"
+        error: errorMessage,
+        enhancedPrompt: fallbackPrompt
       },
       { status: 500 }
     );

@@ -429,20 +429,53 @@ export function ModelGenerator() {
       const formData = new FormData()
       formData.append("image", imageFile)
 
+      // Add a toast to indicate image analysis is starting
+      toast({
+        title: "Analyzing Image",
+        description: "Using AI to identify and describe the object in your image...",
+      })
+
       const response = await fetch("/api/analyze-image-for-prompt", {
         method: "POST",
         body: formData,
       })
 
-      if (!response.ok) {
-        throw new Error("Failed to analyze image")
-      }
-
       const data = await response.json()
+      
+      if (!response.ok) {
+        // Show more specific error message but still return a valid prompt
+        console.error("Image analysis error:", data.error || "Unknown error")
+        toast({
+          title: "Image Analysis Issue",
+          description: data.error || "There was an issue analyzing your image, but we'll still generate a model.",
+          variant: "destructive",
+        })
+        return data.enhancedPrompt || "Create a single 3D model based on this image with minimum thickness of 0.8mm-1mm, avoiding ultra-thin sections and fine details";
+      }
+      
+      // Check if the enhanced prompt seems like a rejection or placeholder
+      if (data.enhancedPrompt?.toLowerCase().includes("can't help") || 
+          data.enhancedPrompt?.toLowerCase().includes("sorry") ||
+          data.enhancedPrompt?.toLowerCase().includes("unable to")) {
+        
+        console.warn("Image analysis returned a rejection-like response:", data.enhancedPrompt);
+        toast({
+          title: "Image Analysis Limited",
+          description: "We couldn't fully analyze your image, but we'll still generate a model.",
+          variant: "default",
+        })
+        return "Create a single 3D model based on this image with minimum thickness of 0.8mm-1mm, avoiding ultra-thin sections and fine details";
+      }
+      
       return data.enhancedPrompt || "Create a single 3D model based on this image with minimum thickness of 0.8mm-1mm, avoiding ultra-thin sections and fine details";
     } catch (error) {
       console.error("Error analyzing image:", error)
       // Fallback prompt if analysis fails
+      toast({
+        title: "Image Analysis Failed",
+        description: "We'll generate a model using basic parameters instead.",
+        variant: "destructive",
+      })
       return "Create a single 3D model based on this image with minimum thickness of 0.8mm-1mm, avoiding ultra-thin sections and fine details";
     } finally {
       setIsEnhancingPrompt(false)
@@ -1447,6 +1480,9 @@ export function ModelGenerator() {
                       </p>
                       <p className="mt-1 text-xs text-gray-500">
                         JPG, PNG up to 10MB
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        For best results, use clear images of single objects 
                       </p>
                     </div>
                   )}
