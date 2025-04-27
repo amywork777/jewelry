@@ -328,6 +328,13 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                   <TabsContent value="design" className="space-y-3">
                     {importedMesh ? (
                       <>
+                        {/* Fixed Size Notice */}
+                        <div className="text-center mb-2">
+                          <span className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-full">
+                            Standard Size: Approximately 1 inch (25.4mm)
+                          </span>
+                        </div>
+                        
                         {/* Material */}
                         <div className="space-y-2">
                           <Label className="text-sm font-medium text-gray-700">Material</Label>
@@ -520,6 +527,13 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                       </CollapsibleTrigger>
                       <CollapsibleContent>
                         <div className="bg-white rounded-md border border-gray-200 p-3 shadow-sm">
+                          {/* Fixed Size Notice */}
+                          <div className="mb-3 text-center">
+                            <span className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-full">
+                              Standard Size: Approximately 1 inch (25.4mm)
+                            </span>
+                          </div>
+                          
                           {/* Material Options */}
                           <div className="space-y-2">
                             <Label className="text-sm font-medium text-gray-700">Material</Label>
@@ -758,8 +772,15 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                 </TabsList>
                 
                 <TabsContent value="material" className="space-y-3">
+                  {/* Fixed Size Notice */}
+                  <div className="text-center mb-2">
+                    <span className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-full">
+                      Standard Size: Approximately 1 inch (25.4mm)
+                    </span>
+                  </div>
+                  
                   <div className="space-y-2">
-                    <Select 
+                    <Select
                       value={materialType}
                       onValueChange={(value) => setMaterialType(value as 'gold' | 'silver' | 'rose-gold')}
                     >
@@ -796,6 +817,15 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
             
             {/* Desktop view */}
             <div className="hidden md:block space-y-3">
+              {/* Fixed Size Notice */}
+              <div className="bg-white rounded-md border border-gray-200 p-3 shadow-sm">
+                <div className="text-center">
+                  <span className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-full">
+                    Standard Size: Approximately 1 inch (25.4mm)
+                  </span>
+                </div>
+              </div>
+              
               <div className="bg-white rounded-md border border-gray-200 p-3 shadow-sm">
                 <h3 className="text-sm font-medium text-gray-700 mb-2">Material</h3>
                 <Select 
