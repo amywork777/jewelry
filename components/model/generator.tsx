@@ -105,9 +105,6 @@ export function ModelGenerator() {
     usageCount?: number;
   }>({});
 
-  const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false)
-  const [enhancedPrompt, setEnhancedPrompt] = useState<string | null>(null)
-
   // Listen for configuration messages from parent window
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -209,8 +206,9 @@ export function ModelGenerator() {
     setTextPrompt("");
     setSelectedFile(null);
     setPreviewUrl(null);
-    setIsEnhancingPrompt(false);
-    setEnhancedPrompt(null);
+    setImageTextPrompt("");
+    setSelectedImageTextFile(null);
+    setPreviewImageTextUrl(null);
     setStatus("idle");
     setModelUrl(null);
     setTaskId(null);
@@ -321,10 +319,10 @@ export function ModelGenerator() {
             button.addEventListener('click', function() {
               console.log('Generate 3D Model clicked');
               
-              // Notify the parent about the generation
+              // Notify the parent (FISHCAD) about the generation
               if (window.parent !== window) {
                 window.parent.postMessage({
-                  type: 'model_generated',
+                  type: 'fishcad_model_generated',
                   timestamp: new Date().toISOString()
                 }, '*');
               }
@@ -357,7 +355,7 @@ export function ModelGenerator() {
           // Notify parent
           if (window.parent !== window) {
             window.parent.postMessage({
-              type: 'model_generated',
+              type: 'fishcad_model_generated',
               element: target.tagName,
               text: target.textContent
             }, '*');
@@ -383,7 +381,7 @@ export function ModelGenerator() {
   const notifyParentAboutGeneration = () => {
     if (window.parent !== window) {
       window.parent.postMessage({
-        type: 'model_generated',
+        type: 'fishcad_model_generated',
         source: 'magic.taiyaki.ai',
         method: inputType,
         timestamp: new Date().toISOString()
@@ -391,96 +389,6 @@ export function ModelGenerator() {
       console.log('Notified parent about model generation initiation');
     }
   };
-
-  // Function to enhance text prompt with ChatGPT to ensure one object and 3D printability
-  const enhanceTextPrompt = async (prompt: string): Promise<string> => {
-    setIsEnhancingPrompt(true)
-    try {
-      const response = await fetch("/api/enhance-prompt", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt,
-          type: "text"
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to enhance prompt")
-      }
-
-      const data = await response.json()
-      return data.enhancedPrompt
-    } catch (error) {
-      console.error("Error enhancing prompt:", error)
-      // If enhancement fails, still use the original prompt but with some basic fixes
-      return `${prompt} (design as a single object with minimum thickness of 0.8mm-1mm, avoiding ultra-thin sections and fine details)`;
-    } finally {
-      setIsEnhancingPrompt(false)
-    }
-  }
-
-  // Function to analyze and enhance image-based prompts with ChatGPT Vision
-  const enhanceImagePrompt = async (imageFile: File): Promise<string> => {
-    setIsEnhancingPrompt(true)
-    try {
-      const formData = new FormData()
-      formData.append("image", imageFile)
-
-      // Add a toast to indicate image analysis is starting
-      toast({
-        title: "Analyzing Image",
-        description: "Using AI to identify and describe the object in your image...",
-      })
-
-      const response = await fetch("/api/analyze-image-for-prompt", {
-        method: "POST",
-        body: formData,
-      })
-
-      const data = await response.json()
-      
-      if (!response.ok) {
-        // Show more specific error message but still return a valid prompt
-        console.error("Image analysis error:", data.error || "Unknown error")
-        toast({
-          title: "Image Analysis Issue",
-          description: data.error || "There was an issue analyzing your image, but we'll still generate a model.",
-          variant: "destructive",
-        })
-        return data.enhancedPrompt || "Create a single 3D model based on this image with minimum thickness of 0.8mm-1mm, avoiding ultra-thin sections and fine details";
-      }
-      
-      // Check if the enhanced prompt seems like a rejection or placeholder
-      if (data.enhancedPrompt?.toLowerCase().includes("can't help") || 
-          data.enhancedPrompt?.toLowerCase().includes("sorry") ||
-          data.enhancedPrompt?.toLowerCase().includes("unable to")) {
-        
-        console.warn("Image analysis returned a rejection-like response:", data.enhancedPrompt);
-        toast({
-          title: "Image Analysis Limited",
-          description: "We couldn't fully analyze your image, but we'll still generate a model.",
-          variant: "default",
-        })
-        return "Create a single 3D model based on this image with minimum thickness of 0.8mm-1mm, avoiding ultra-thin sections and fine details";
-      }
-      
-      return data.enhancedPrompt || "Create a single 3D model based on this image with minimum thickness of 0.8mm-1mm, avoiding ultra-thin sections and fine details";
-    } catch (error) {
-      console.error("Error analyzing image:", error)
-      // Fallback prompt if analysis fails
-      toast({
-        title: "Image Analysis Failed",
-        description: "We'll generate a model using basic parameters instead.",
-        variant: "destructive",
-      })
-      return "Create a single 3D model based on this image with minimum thickness of 0.8mm-1mm, avoiding ultra-thin sections and fine details";
-    } finally {
-      setIsEnhancingPrompt(false)
-    }
-  }
 
   const handleTextSubmit = async () => {
     if (!textPrompt.trim()) {
@@ -498,25 +406,10 @@ export function ModelGenerator() {
     // Notify parent about generation initiation
     notifyParentAboutGeneration();
     
-    // Enhance the prompt first
-    setIsEnhancingPrompt(true)
-    toast({
-      title: "Enhancing Prompt",
-      description: "Optimizing your prompt for better 3D model creation...",
-    })
+    setStatus("uploading")
+    setProgress(0)
     
     try {
-      const optimizedPrompt = await enhanceTextPrompt(textPrompt)
-      setEnhancedPrompt(optimizedPrompt)
-      
-      toast({
-        title: "Prompt Enhanced",
-        description: "Creating your 3D model with optimized instructions for manufacturability...",
-      })
-      
-      setStatus("uploading")
-      setProgress(0)
-      
       setStatus("generating")
       setProgress(0)
       setIsGenerating(true)
@@ -524,7 +417,10 @@ export function ModelGenerator() {
       setStlBlob(null)
       setStlUrl(null)
 
-      // Call the API to start text-to-model generation with enhanced prompt
+      // Modify the prompt to ensure only one object is generated
+      const enhancedPrompt = `${textPrompt.trim()}. Important: Generate exactly one single cohesive object in the model, not multiple separate objects.`;
+
+      // Call the API to start text-to-model generation
       const response = await fetch("/api/generate-model", {
         method: "POST",
         headers: {
@@ -532,7 +428,7 @@ export function ModelGenerator() {
         },
         body: JSON.stringify({
           type: "text",
-          prompt: optimizedPrompt,
+          prompt: enhancedPrompt,
         }),
       })
 
@@ -549,7 +445,6 @@ export function ModelGenerator() {
       console.error("Error generating model:", error)
       setStatus("error")
       setIsGenerating(false)
-      setIsEnhancingPrompt(false)
       toast({
         title: "Error",
         description: "Failed to generate model. Please try again.",
@@ -574,25 +469,17 @@ export function ModelGenerator() {
     // Notify parent about generation initiation
     notifyParentAboutGeneration();
     
-    // First analyze the image to get an enhanced prompt
-    toast({
-      title: "Analyzing Image",
-      description: "Identifying the object and optimizing for better 3D model creation...",
-    })
+    setStatus("uploading")
+    setProgress(0)
     
     try {
-      // Get enhanced prompt from image analysis
-      const optimizedPrompt = await enhanceImagePrompt(selectedFile)
-      setEnhancedPrompt(optimizedPrompt)
-      
-      toast({
-        title: "Image Analyzed",
-        description: "Creating a 3D model suitable for manufacturability...",
-      })
-      
-      setStatus("uploading")
+      setStatus("generating")
       setProgress(0)
-      
+      setIsGenerating(true)
+      // Reset STL state when generating a new model
+      setStlBlob(null)
+      setStlUrl(null)
+
       // First upload the image
       const formData = new FormData()
       formData.append("file", selectedFile)
@@ -608,7 +495,7 @@ export function ModelGenerator() {
 
       const uploadData = await uploadResponse.json()
 
-      // Then start the generation with both image and enhanced prompt
+      // Then start the image-to-model generation
       setStatus("generating")
       const response = await fetch("/api/generate-model", {
         method: "POST",
@@ -618,7 +505,6 @@ export function ModelGenerator() {
         body: JSON.stringify({
           type: "image",
           imageToken: uploadData.imageToken,
-          prompt: optimizedPrompt, // Add the enhanced prompt to guide the image-based generation
         }),
       })
 
@@ -635,7 +521,6 @@ export function ModelGenerator() {
       console.error("Error generating model:", error)
       setStatus("error")
       setIsGenerating(false)
-      setIsEnhancingPrompt(false)
       toast({
         title: "Error",
         description: "Failed to generate model. Please try again.",
@@ -864,8 +749,8 @@ export function ModelGenerator() {
       setStlBlob(blob)
       
       // Create a URL for the STL blob
-      const stlUrl = URL.createObjectURL(blob)
-      setStlUrl(stlUrl)
+      const blobUrl = URL.createObjectURL(blob)
+      setStlUrl(blobUrl)
       
       toast({
         title: "Conversion complete",
@@ -874,7 +759,7 @@ export function ModelGenerator() {
 
       // Dispatch custom event with STL URL for parent components
       const stlGeneratedEvent = new CustomEvent('stlGenerated', {
-        detail: { stlUrl: stlUrl },
+        detail: { stlUrl: blobUrl },
         bubbles: true,
         composed: true
       });
@@ -1016,53 +901,54 @@ export function ModelGenerator() {
         setProgress(100);
         setIsGenerating(false);
         
-        // Immediately start STL conversion (don't wait to show the model URL first)
+        // Scroll to the generated model area immediately
+        setTimeout(() => {
+          const modelArea = document.getElementById('stl-model-viewer');
+          if (modelArea) {
+            modelArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 100);
+        
+        // Automatically start STL conversion when model is ready
         if (finalModelUrl) {
-          // Don't show the model directly, go straight to STL conversion
-          setIsConvertingStl(true);
+          toast({
+            title: "Processing STL",
+            description: "Converting your 3D model to STL format...",
+          });
           
-          // Start STL conversion right away
+          // Start STL conversion
           convertToStl(finalModelUrl)
             .then(blob => {
               if (blob) {
                 toast({
-                  title: "Model Ready",
-                  description: "Your 3D model has been created successfully.",
+                  title: "STL Ready",
+                  description: "Your model is ready to be added to FISHCAD.",
                 });
-                
-                // Scroll to the generated model after conversion
-                setTimeout(() => {
-                  const modelArea = document.getElementById('stl-model-viewer');
-                  if (modelArea) {
-                    modelArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  }
-                }, 100);
               }
             })
             .catch(() => {
               // Error is already handled in convertToStl
             });
-        } else {
-          toast({
-            title: "Error",
-            description: "Failed to get model URL for conversion.",
-            variant: "destructive",
-          });
         }
+        
+        toast({
+          title: "Success!",
+          description: "Your 3D model has been generated successfully.",
+        });
 
         // Send generation completion message to parent window if in iframe
         if (window !== window.parent) {
           const modelInfo = {
             modelUrl: data.modelUrl || data.baseModelUrl,
             prompt: inputType === "text" ? textPrompt : "Image-based 3D model",
-            generationMethod: inputType.includes("image") ? "image-to-3d" : "text-to-3d",
+            generationMethod: inputType === "text" ? "text-to-3d" : "image-to-3d",
             timestamp: new Date().toISOString(),
             taskId: taskId,
             fileType: 'glb'
           };
           
           window.parent.postMessage({
-            type: 'model_generated',
+            type: 'model-generated',
             source: 'magic.taiyaki.ai',
             modelInfo
           }, '*');
@@ -1150,7 +1036,7 @@ export function ModelGenerator() {
       // Create and click a download link
       const link = document.createElement('a');
       link.href = stlUrl;
-      link.download = "3d-model.stl";
+      link.download = "magicfish-generated-model.stl";
       document.body.appendChild(link);
       link.click();
       
@@ -1411,7 +1297,7 @@ export function ModelGenerator() {
                     placeholder="Describe your 3D model in detail (e.g., a blue dolphin with a curved fin, swimming)"
                     value={textPrompt}
                     onChange={(e) => setTextPrompt(e.target.value)}
-                    disabled={isGenerating || isEnhancingPrompt}
+                    disabled={isGenerating}
                     className="min-h-[100px] sm:min-h-[120px] pr-10 text-sm sm:text-base"
                   />
                   <Button
@@ -1420,7 +1306,7 @@ export function ModelGenerator() {
                     variant="ghost"
                     className="absolute right-2 top-2"
                     onClick={toggleVoiceRecording}
-                    disabled={isGenerating || isEnhancingPrompt}
+                    disabled={isGenerating}
                   >
                     {isRecording ? (
                       <MicOff className="h-4 w-4 sm:h-5 sm:w-5 text-red-500" />
@@ -1429,22 +1315,18 @@ export function ModelGenerator() {
                     )}
                   </Button>
                 </div>
-                
-                {enhancedPrompt && !isEnhancingPrompt && status === "generating" && (
-                  <div className="mt-2 text-xs text-gray-600 bg-gray-50 p-3 rounded-md border border-gray-200">
-                    <p className="font-medium mb-1">Enhanced model design prompt:</p>
-                    <p>{enhancedPrompt}</p>
-                  </div>
-                )}
+                <p className="text-xs text-gray-500 -mt-2">
+                  Tip: Describe one object at a time for best results. For example, "a golden ring with a diamond" instead of "a ring and a necklace".
+                </p>
               </TabsContent>
               <TabsContent value="image" className="space-y-4">
                 <div
                   {...getRootProps()}
                   className={`border-2 border-dashed rounded-lg p-3 sm:p-4 text-center cursor-pointer transition-colors ${
                     isDragActive ? "border-primary bg-primary/10" : "border-gray-300 hover:bg-gray-50"
-                  } ${status === "uploading" || status === "generating" || isEnhancingPrompt ? "opacity-50 cursor-not-allowed" : ""}`}
+                  } ${status === "uploading" || status === "generating" ? "opacity-50 cursor-not-allowed" : ""}`}
                 >
-                  <input {...getInputProps()} disabled={status === "uploading" || status === "generating" || isEnhancingPrompt} />
+                  <input {...getInputProps()} />
                   {previewUrl ? (
                     <div className="flex flex-col items-center gap-2">
                       <img
@@ -1461,10 +1343,8 @@ export function ModelGenerator() {
                             e.stopPropagation();
                             setSelectedFile(null);
                             setPreviewUrl(null);
-                            setEnhancedPrompt(null);
                           }}
                           className="text-xs sm:text-sm h-7 sm:h-9 px-2 sm:px-3"
-                          disabled={status === "uploading" || status === "generating" || isEnhancingPrompt}
                         >
                           <Repeat className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" /> Remove image
                         </Button>
@@ -1481,40 +1361,24 @@ export function ModelGenerator() {
                       <p className="mt-1 text-xs text-gray-500">
                         JPG, PNG up to 10MB
                       </p>
-                      <p className="mt-1 text-xs text-gray-500">
-                        For best results, use clear images of single objects 
-                      </p>
                     </div>
                   )}
                 </div>
-
-                {enhancedPrompt && !isEnhancingPrompt && status === "generating" && (
-                  <div className="mt-2 text-xs text-gray-600 bg-gray-50 p-3 rounded-md border border-gray-200">
-                    <p className="font-medium mb-1">Enhanced model design prompt:</p>
-                    <p>{enhancedPrompt}</p>
-                  </div>
-                )}
               </TabsContent>
             </div>
 
             <div className="space-y-3 sm:space-y-4 mt-4">
               {/* Progress bars */}
-              {(status === "generating" || status === "uploading" || isEnhancingPrompt) && (
+              {(status === "generating" || status === "uploading") && (
                 <div className="space-y-2">
                   <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all duration-500 ease-in-out ${
-                        isEnhancingPrompt ? "bg-blue-400" : "bg-primary"
-                      }`}
-                      style={{ width: isEnhancingPrompt ? "50%" : `${progress}%` }}
+                      className="h-full bg-primary rounded-full transition-all duration-500 ease-in-out"
+                      style={{ width: `${progress}%` }}
                     ></div>
                   </div>
                   <p className="text-center text-xs sm:text-sm text-gray-500">
-                    {isEnhancingPrompt 
-                      ? "Enhancing prompt with AI..." 
-                      : status === "uploading" 
-                        ? "Uploading image" 
-                        : "Generating 3D model"}: {isEnhancingPrompt ? "50" : progress}%
+                    {status === "uploading" ? "Uploading image" : "Generating 3D model"}: {progress}%
                   </p>
                 </div>
               )}
@@ -1528,6 +1392,11 @@ export function ModelGenerator() {
                     <div className="w-full h-full flex flex-col items-center justify-center">
                       <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
                       <p className="text-sm text-gray-600">Converting to STL format...</p>
+                    </div>
+                  ) : !stlUrl && !stlBlob ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center">
+                      <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
+                      <p className="text-sm text-gray-600">Preparing 3D model...</p>
                     </div>
                   ) : (
                     <div 
@@ -1561,6 +1430,30 @@ export function ModelGenerator() {
                     )}
                   </Button>
                   
+                  <div className="w-full p-3 border border-gray-200 rounded-md text-xs sm:text-sm text-gray-700 bg-gray-50">
+                    <h3 className="font-medium mb-2">How to use with FISHCAD:</h3>
+                    
+                    <div className="mb-3">
+                      <p className="font-medium">1. Download the STL File</p>
+                      <ul className="pl-4 mt-1 space-y-1 list-disc">
+                        <li>Click the download link for any STL model on our site</li>
+                        <li>Note where the file is saved (usually your Downloads folder)</li>
+                      </ul>
+                    </div>
+                    
+                    <div className="mb-2">
+                      <p className="font-medium">2. Import into FISHCAD</p>
+                      <ul className="pl-4 mt-1 space-y-1 list-disc">
+                        <li>Go to <a href="https://fishcad.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">FISHCAD.com</a></li>
+                        <li>Click the "Import" button in the top menu</li>
+                        <li>Select your downloaded STL file</li>
+                        <li>Your model will appear in your FISHCAD workspace</li>
+                      </ul>
+                    </div>
+                    
+                    <p className="mt-3 text-sm italic">That's it! You can now edit, modify, or use the model in your FISHCAD project.</p>
+                  </div>
+                  
                   <Button
                     className="w-full flex items-center justify-center"
                     variant="secondary"
@@ -1585,19 +1478,11 @@ export function ModelGenerator() {
                   }
                   disabled={
                     isGenerating || 
-                    isEnhancingPrompt ||
                     (inputType === "text" && !textPrompt.trim()) ||
                     (inputType === "image" && !selectedFile)
                   }
                 >
-                  {isEnhancingPrompt ? (
-                    <>
-                      <span className="text-xs sm:text-sm mr-2">
-                        Enhancing Prompt
-                      </span>
-                      <div className="h-3 w-3 sm:h-4 sm:w-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                    </>
-                  ) : isGenerating ? (
+                  {isGenerating ? (
                     <>
                       <span className="text-xs sm:text-sm mr-2">
                         Generating
