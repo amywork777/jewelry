@@ -67,7 +67,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
   const [attachmentRotateY, setAttachmentRotateY] = useState(0)
   const fixedAttachmentScale = 1.0; // Fixed scale factor for attachments
   const [attachmentPositionX, setAttachmentPositionX] = useState(0)
-  const [attachmentPositionY, setAttachmentPositionY] = useState(0)
+  const [attachmentPositionY, setAttachmentPositionY] = useState(0) // Vertical position
   const [attachmentPositionZ, setAttachmentPositionZ] = useState(0)
   
   // Scene reference for exporting
@@ -398,8 +398,8 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                                     </div>
                                     <Slider 
                                       value={[extensionLength]} 
-                                      min={3} 
-                                      max={20} 
+                                      min={1} 
+                                      max={5} 
                                       step={0.5} 
                                       onValueChange={(value) => setExtensionLength(value[0])} 
                                       className="mt-1"
@@ -407,7 +407,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                                   </div>
                                 )}
                               
-                                <div className="space-y-1">
+                                <div className="space-y-1 mb-2">
                                   <div className="flex justify-between text-xs">
                                     <Label className="text-gray-600">Y Rotation</Label>
                                     <span className="text-gray-900">{attachmentRotateY}°</span>
@@ -418,6 +418,21 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                                     max={360} 
                                     step={5} 
                                     onValueChange={(value) => setAttachmentRotateY(value[0])} 
+                                    className="mt-1"
+                                  />
+                                </div>
+                                
+                                <div className="space-y-1">
+                                  <div className="flex justify-between text-xs">
+                                    <Label className="text-gray-600">Vertical Position</Label>
+                                    <span className="text-gray-900">{attachmentPositionY.toFixed(1)}</span>
+                                  </div>
+                                  <Slider 
+                                    value={[attachmentPositionY]} 
+                                    min={-5} 
+                                    max={5} 
+                                    step={0.5} 
+                                    onValueChange={(value) => setAttachmentPositionY(value[0])} 
                                     className="mt-1"
                                   />
                                 </div>
@@ -609,8 +624,8 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                                     </div>
                                     <Slider 
                                       value={[extensionLength]} 
-                                      min={3} 
-                                      max={20} 
+                                      min={1} 
+                                      max={5} 
                                       step={0.5} 
                                       onValueChange={(value) => setExtensionLength(value[0])} 
                                       className="mt-1"
@@ -618,7 +633,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                                   </div>
                                 )}
                               
-                                <div className="space-y-1">
+                                <div className="space-y-1 mb-2">
                                   <div className="flex justify-between text-xs">
                                     <Label className="text-gray-600">Y Rotation</Label>
                                     <span className="text-gray-900">{attachmentRotateY}°</span>
@@ -629,6 +644,21 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                                     max={360} 
                                     step={5} 
                                     onValueChange={(value) => setAttachmentRotateY(value[0])} 
+                                    className="mt-1"
+                                  />
+                                </div>
+                                
+                                <div className="space-y-1">
+                                  <div className="flex justify-between text-xs">
+                                    <Label className="text-gray-600">Vertical Position</Label>
+                                    <span className="text-gray-900">{attachmentPositionY.toFixed(1)}</span>
+                                  </div>
+                                  <Slider 
+                                    value={[attachmentPositionY]} 
+                                    min={-5} 
+                                    max={5} 
+                                    step={0.5} 
+                                    onValueChange={(value) => setAttachmentPositionY(value[0])} 
                                     className="mt-1"
                                   />
                                 </div>
