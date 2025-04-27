@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import JewelryViewer from './components/JewelryViewer'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
-import { getUserModelById } from '@/lib/firebase/models/stlModels'
 
-export default function ViewerPage() {
+// Separate component that uses searchParams to avoid hydration issues
+function ViewerContent() {
   const searchParams = useSearchParams()
   const [stlUrl, setStlUrl] = useState<string | undefined>(undefined)
   const [loading, setLoading] = useState(true)
@@ -17,22 +17,35 @@ export default function ViewerPage() {
       setLoading(true)
       
       // Check if a model was selected from the library
-      const savedUrl = localStorage.getItem('selectedModelUrl')
-      if (savedUrl) {
-        setStlUrl(savedUrl)
-        // Clear the storage so it doesn't persist unnecessarily
-        localStorage.removeItem('selectedModelUrl')
-        setLoading(false)
-        return
+      if (typeof window !== 'undefined') {
+        const savedUrl = localStorage.getItem('selectedModelUrl')
+        if (savedUrl) {
+          setStlUrl(savedUrl)
+          // Clear the storage so it doesn't persist unnecessarily
+          localStorage.removeItem('selectedModelUrl')
+          setLoading(false)
+          return
+        }
       }
       
       // Check if a specific model ID was provided in the URL
       const modelId = searchParams.get('modelId')
       if (modelId) {
         try {
-          const model = await getUserModelById(modelId)
-          if (model && model.stlFileUrl) {
-            setStlUrl(model.stlFileUrl)
+          // This is a safer approach for Vercel deployment
+          // Only import Firebase if needed
+          const { getUserModelById } = await import('@/lib/firebase/models/stlModels').catch(err => {
+            console.error('Error importing Firebase module:', err);
+            return { getUserModelById: null };
+          });
+          
+          if (getUserModelById) {
+            const model = await getUserModelById(modelId);
+            if (model && model.stlFileUrl) {
+              setStlUrl(model.stlFileUrl);
+            }
+          } else {
+            console.warn('Firebase module not available');
           }
         } catch (err) {
           console.error('Error loading model:', err)
@@ -58,7 +71,22 @@ export default function ViewerPage() {
         </Button>
       </div>
       
-      <JewelryViewer stlUrl={stlUrl} />
+      {loading ? (
+        <div className="h-[85vh] flex items-center justify-center">
+          <p className="text-gray-500">Loading viewer...</p>
+        </div>
+      ) : (
+        <JewelryViewer stlUrl={stlUrl} />
+      )}
     </div>
+  )
+}
+
+// Main page component with Suspense boundary
+export default function ViewerPage() {
+  return (
+    <Suspense fallback={<div className="container mx-auto py-6">Loading viewer...</div>}>
+      <ViewerContent />
+    </Suspense>
   )
 } 

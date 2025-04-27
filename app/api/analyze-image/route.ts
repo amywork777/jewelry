@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server"
 import OpenAI from "openai"
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, 
-})
+// Initialize OpenAI client conditionally to avoid build-time errors
+let openai: OpenAI | null = null;
+try {
+  if (process.env.OPENAI_API_KEY) {
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY, 
+    });
+  }
+} catch (error) {
+  console.error("Failed to initialize OpenAI client:", error);
+}
 
 export async function POST(request: Request) {
   console.log("🔍 [SERVER] /api/analyze-image endpoint called");
@@ -20,7 +27,7 @@ export async function POST(request: Request) {
     const url = new URL(request.url);
     console.log(`🔍 [SERVER] Request from hostname: ${url.hostname}`);
     
-    if (!process.env.OPENAI_API_KEY) {
+    if (!process.env.OPENAI_API_KEY || !openai) {
       console.error("❌ [SERVER] OPENAI_API_KEY not found in environment variables");
       return NextResponse.json(
         { 
@@ -83,6 +90,10 @@ export async function POST(request: Request) {
       
       // Call OpenAI Vision API with instructions for a concise description
       try {
+        if (!openai) {
+          throw new Error("OpenAI client not initialized");
+        }
+        
         const response = await openai.chat.completions.create({
           model: "gpt-4o",
           messages: [
