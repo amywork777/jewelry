@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Slider } from "@/components/ui/slider"
-import { ChevronDown } from "lucide-react"
+import { ChevronDown, ShoppingCart, Download } from "lucide-react"
 import ModelImport from './ModelImport'
 import Image from 'next/image'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -72,6 +72,25 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
   
   // Scene reference for exporting
   const sceneRef = useRef<THREE.Group>(null)
+  
+  // Mobile view state
+  const [isMobile, setIsMobile] = useState(false)
+  
+  // Check screen size on mount and window resize
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+  
+  // Function to increment/decrement values for mobile
+  const adjustValue = (setter: React.Dispatch<React.SetStateAction<number>>, currentValue: number, step: number, min: number, max: number) => {
+    setter(prev => Math.min(Math.max(prev + step, min), max))
+  }
   
   // Load STL from URL if provided
   useEffect(() => {
@@ -160,8 +179,8 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
   }
   
   return (
-    <div className="grid grid-cols-1 md:grid-cols-5 h-[85vh] md:h-[90vh] gap-2 md:gap-4 font-quicksand">
-      <div className="md:col-span-3 bg-secondary rounded-xl cute-shadow overflow-hidden relative h-[40vh] md:h-full">
+    <div className="grid grid-cols-1 md:grid-cols-2 h-auto gap-2 md:gap-8 font-quicksand">
+      <div className="bg-secondary rounded-xl cute-shadow overflow-hidden relative h-[40vh] md:h-[60vh] mx-auto w-full md:max-w-[calc(60vh*1.2)] flex-shrink-0">
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 z-10">
             <div className="bg-card p-4 rounded-xl cute-shadow">
@@ -295,260 +314,538 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
             </div>
           </div>
         )}
-        
-        {/* Change Charm Design button always visible when in edit mode */}
-        {!readOnly && (
-          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2">
-            <Button
-              onClick={() => setImportedMesh(null)}
-              className="bg-card hover:bg-secondary text-foreground border border-border shadow-md"
-              size="default"
-            >
-              {importedMesh ? "Change Your Charm" : "Design Your Charm"}
-            </Button>
-          </div>
-        )}
       </div>
       
-      <div className="md:col-span-2 p-2 md:p-4 overflow-auto max-h-[60vh] md:max-h-none">
-        <div className="space-y-3 md:space-y-6">
-          <div>
-            <h2 className="text-xl md:text-2xl font-medium mb-1 text-foreground">Custom Charm Designer</h2>
-            <p className="text-sm text-muted-foreground mb-3 md:mb-4">Standard charm size: 1 inch (25.4mm)</p>
-            
-            {/* Metal Type selection */}
-            <div className="mb-4 md:mb-6 bg-card p-3 md:p-4 rounded-xl cute-shadow">
-              <h3 className="text-lg font-medium mb-2 text-card-foreground">Metal Type</h3>
-              <RadioGroup 
-                value={materialType} 
-                onValueChange={(value) => setMaterialType(value as 'gold' | 'silver')}
-                className="flex gap-4"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="gold" id="gold" />
-                  <Label htmlFor="gold" className="font-medium">Gold</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="silver" id="silver" />
-                  <Label htmlFor="silver" className="font-medium">Silver</Label>
-                </div>
-              </RadioGroup>
-            </div>
-            
-            {/* Jewelry Type Selection */}
-            <div className="mb-4 md:mb-6 bg-card p-3 md:p-4 rounded-xl cute-shadow">
-              <h3 className="text-lg font-medium mb-2 text-card-foreground">Jewelry Type</h3>
-              <RadioGroup 
-                value={baseJewelryType} 
-                onValueChange={(value) => setBaseJewelryType(value as JewelryBaseType)}
-                className="flex flex-col gap-2"
-              >
-                <div className="flex items-center space-x-2 py-1">
-                  <RadioGroupItem value="none" id="charm-only" />
-                  <Label htmlFor="charm-only" className="font-medium">Charm Only</Label>
-                </div>
-                <div className="flex items-center space-x-2 py-1">
-                  <RadioGroupItem value="necklace" id="necklace" />
-                  <Label htmlFor="necklace" className="font-medium">Charm with Chain (18")</Label>
-                </div>
-              </RadioGroup>
-            </div>
-            
-            {/* Attachment options */}
-            <Collapsible 
-              open={attachmentOptionsOpen} 
-              onOpenChange={setAttachmentOptionsOpen}
-              className="mb-4 md:mb-6 bg-card p-3 md:p-4 rounded-xl cute-shadow"
+      {/* Mobile view - tabs right below the 3D preview */}
+      {isMobile && (
+        <div className="p-2 mb-4">
+          {/* Actions - Add to Cart is more prominent now */}
+          <div className="mb-4">
+            <Button
+              onClick={handleAddToCart}
+              className="w-full bg-theme-dark text-white hover:bg-theme-darkest h-12 text-base"
             >
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-medium text-card-foreground">Attachment Options</h3>
-                <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="sm" className="hover:bg-transparent">
-                    <ChevronDown className={`h-4 w-4 transition-transform ${attachmentOptionsOpen ? "transform rotate-180" : ""}`} />
-                  </Button>
-                </CollapsibleTrigger>
-              </div>
-              
-              <CollapsibleContent className="space-y-4">
-                <div className="flex justify-between items-center py-2">
-                  <Label htmlFor="attachment-ring" className="font-medium">Attachment Ring</Label>
-                  <Switch 
-                    id="attachment-ring"
-                    checked={showAttachmentRing} 
-                    onCheckedChange={setShowAttachmentRing}
-                  />
-                </div>
-                
-                <div className="flex justify-between items-center py-2">
-                  <Label htmlFor="extension-bar" className="font-medium">Extension Bar</Label>
-                  <Switch 
-                    id="extension-bar"
-                    checked={showExtensionBar} 
-                    onCheckedChange={setShowExtensionBar}
-                  />
-                </div>
-                
-                {showExtensionBar && (
-                  <div className="space-y-1 py-2">
-                    <div className="flex justify-between">
-                      <Label htmlFor="extension-length" className="font-medium">Extension Length: {extensionLength}mm</Label>
-                    </div>
-                    <Slider 
-                      id="extension-length"
-                      min={1} 
-                      max={10} 
-                      step={0.5} 
-                      value={[extensionLength]} 
-                      onValueChange={(values) => setExtensionLength(values[0])}
-                    />
-                  </div>
-                )}
-                
-                <div className="space-y-1 py-2">
-                  <div className="flex justify-between">
-                    <Label htmlFor="attachment-rotate" className="font-medium">Rotate: {attachmentRotateY}°</Label>
-                  </div>
-                  <Slider 
-                    id="attachment-rotate"
-                    min={-180} 
-                    max={180} 
-                    step={5} 
-                    value={[attachmentRotateY]} 
-                    onValueChange={(values) => setAttachmentRotateY(values[0])}
-                  />
-                </div>
-                
-                {/* Horizontal position */}
-                <div className="space-y-1 py-2">
-                  <div className="flex justify-between">
-                    <Label htmlFor="attachment-position-x" className="font-medium">Horizontal: {attachmentPositionX}</Label>
-                  </div>
-                  <Slider 
-                    id="attachment-position-x"
-                    min={-5} 
-                    max={5} 
-                    step={0.1} 
-                    value={[attachmentPositionX]} 
-                    onValueChange={(values) => setAttachmentPositionX(values[0])}
-                  />
-                </div>
-                
-                {/* Vertical position */}
-                <div className="space-y-1 py-2">
-                  <div className="flex justify-between">
-                    <Label htmlFor="attachment-position-y" className="font-medium">Vertical: {attachmentPositionY}</Label>
-                  </div>
-                  <Slider 
-                    id="attachment-position-y"
-                    min={-5} 
-                    max={5} 
-                    step={0.1} 
-                    value={[attachmentPositionY]} 
-                    onValueChange={(values) => setAttachmentPositionY(values[0])}
-                  />
-                </div>
-                
-                {/* Depth position */}
-                <div className="space-y-1 py-2">
-                  <div className="flex justify-between">
-                    <Label htmlFor="attachment-position-z" className="font-medium">Depth: {attachmentPositionZ}</Label>
-                  </div>
-                  <Slider 
-                    id="attachment-position-z"
-                    min={-5} 
-                    max={5} 
-                    step={0.1} 
-                    value={[attachmentPositionZ]} 
-                    onValueChange={(values) => setAttachmentPositionZ(values[0])}
-                  />
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
+              <ShoppingCart className="mr-2 h-5 w-5" /> Add to Cart
+            </Button>
             
-            {/* Charm Options */}
-            <Collapsible 
-              className="mb-4 md:mb-6 bg-card p-3 md:p-4 rounded-xl cute-shadow"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-medium text-card-foreground">Charm Options</h3>
-                <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="sm" className="hover:bg-transparent">
-                    <ChevronDown className="h-4 w-4 transition-transform" />
-                  </Button>
-                </CollapsibleTrigger>
-              </div>
-              
-              <CollapsibleContent className="space-y-4">
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="space-y-1">
-                    <div className="flex justify-between">
-                      <Label htmlFor="rotate-x" className="font-medium">Rotate X: {charmRotateX}°</Label>
-                    </div>
-                    <Slider 
-                      id="rotate-x"
-                      min={-180} 
-                      max={180} 
-                      step={5} 
-                      value={[charmRotateX]} 
-                      onValueChange={(values) => setCharmRotateX(values[0])}
-                      className="cursor-pointer"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex justify-between">
-                      <Label htmlFor="rotate-y" className="font-medium">Rotate Y: {charmRotateY}°</Label>
-                    </div>
-                    <Slider 
-                      id="rotate-y"
-                      min={-180} 
-                      max={180} 
-                      step={5} 
-                      value={[charmRotateY]} 
-                      onValueChange={(values) => setCharmRotateY(values[0])}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex justify-between">
-                      <Label htmlFor="rotate-z" className="font-medium">Rotate Z: {charmRotateZ}°</Label>
-                    </div>
-                    <Slider 
-                      id="rotate-z"
-                      min={-180} 
-                      max={180} 
-                      step={5} 
-                      value={[charmRotateZ]} 
-                      onValueChange={(values) => setCharmRotateZ(values[0])}
-                    />
-                  </div>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-            
-            {/* Actions */}
-            {!readOnly && (
-              <div className="mb-4 md:mb-6 bg-card p-3 md:p-4 rounded-xl cute-shadow">
-                <h3 className="text-lg font-medium mb-2 text-card-foreground">Actions</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <Button 
-                    onClick={exportSTL} 
-                    variant="outline" 
-                    className="w-full border-border bg-card hover:bg-secondary text-foreground"
-                  >
-                    Export Charm
-                  </Button>
-                  
-                  <Button 
-                    onClick={handleAddToCart} 
-                    className="w-full bg-gradient-to-r from-theme-light to-theme-medium text-foreground hover:opacity-90"
-                  >
-                    Add to Cart
-                  </Button>
-                </div>
+            {/* Export STL moved to a subtle text link below */}
+            {importedMesh && (
+              <div className="mt-2 text-center">
+                <button 
+                  onClick={exportSTL}
+                  className="text-xs text-muted-foreground hover:text-foreground underline flex items-center justify-center mx-auto"
+                >
+                  <Download className="h-3 w-3 mr-1" /> Export STL file
+                </button>
               </div>
             )}
           </div>
+
+          <Tabs defaultValue="material" className="w-full">
+            <TabsList className="w-full grid grid-cols-3 mb-2">
+              <TabsTrigger value="material">Material</TabsTrigger>
+              <TabsTrigger value="attachment">Attachment</TabsTrigger>
+              <TabsTrigger value="charm">Charm</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="material" className="space-y-3">
+              {/* Metal Type selection */}
+              <div className="mb-2 bg-card p-3 rounded-xl cute-shadow">
+                <h3 className="text-lg font-medium mb-2 text-card-foreground">Metal Type</h3>
+                <RadioGroup 
+                  value={materialType} 
+                  onValueChange={(value) => setMaterialType(value as 'gold' | 'silver')}
+                  className="flex gap-4"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="gold" id="gold" />
+                    <Label htmlFor="gold" className="font-medium">Gold</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="silver" id="silver" />
+                    <Label htmlFor="silver" className="font-medium">Silver</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+              
+              {/* Jewelry Type Selection */}
+              <div className="mb-2 bg-card p-3 rounded-xl cute-shadow">
+                <h3 className="text-lg font-medium mb-2 text-card-foreground">Jewelry Type</h3>
+                <RadioGroup 
+                  value={baseJewelryType} 
+                  onValueChange={(value) => setBaseJewelryType(value as JewelryBaseType)}
+                  className="flex flex-col gap-2"
+                >
+                  <div className="flex items-center space-x-2 py-1">
+                    <RadioGroupItem value="none" id="charm-only" />
+                    <Label htmlFor="charm-only" className="font-medium">Charm Only</Label>
+                  </div>
+                  <div className="flex items-center space-x-2 py-1">
+                    <RadioGroupItem value="necklace" id="necklace" />
+                    <Label htmlFor="necklace" className="font-medium">Charm with Chain (18")</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="attachment" className="space-y-3">
+              <div className="bg-card p-3 rounded-xl cute-shadow">
+                <h3 className="text-lg font-medium mb-2 text-card-foreground">Attachment Options</h3>
+                
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center py-1">
+                    <Label htmlFor="mobile-attachment-ring" className="font-medium">Attachment Ring</Label>
+                    <Switch 
+                      id="mobile-attachment-ring"
+                      checked={showAttachmentRing} 
+                      onCheckedChange={setShowAttachmentRing}
+                    />
+                  </div>
+                  
+                  <div className="flex justify-between items-center py-1">
+                    <Label htmlFor="mobile-extension-bar" className="font-medium">Extension Bar</Label>
+                    <Switch 
+                      id="mobile-extension-bar"
+                      checked={showExtensionBar} 
+                      onCheckedChange={setShowExtensionBar}
+                    />
+                  </div>
+                  
+                  {showExtensionBar && (
+                    <div className="py-1">
+                      <div className="flex justify-between items-center">
+                        <Label className="font-medium">Extension Length: {extensionLength}mm</Label>
+                        <div className="flex space-x-2 mobile-controls">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => adjustValue(setExtensionLength, extensionLength, -0.5, 1, 10)}
+                            disabled={extensionLength <= 1}
+                          >
+                            -
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => adjustValue(setExtensionLength, extensionLength, 0.5, 1, 10)}
+                            disabled={extensionLength >= 10}
+                          >
+                            +
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="py-1">
+                    <div className="flex justify-between items-center">
+                      <Label className="font-medium">Rotate: {attachmentRotateY}°</Label>
+                      <div className="flex space-x-2 mobile-controls">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => adjustValue(setAttachmentRotateY, attachmentRotateY, -15, -180, 180)}
+                        >
+                          -
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => adjustValue(setAttachmentRotateY, attachmentRotateY, 15, -180, 180)}
+                        >
+                          +
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="py-1">
+                    <div className="flex justify-between items-center">
+                      <Label className="font-medium">Horizontal: {attachmentPositionX}</Label>
+                      <div className="flex space-x-2 mobile-controls">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => adjustValue(setAttachmentPositionX, attachmentPositionX, -0.5, -5, 5)}
+                        >
+                          -
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => adjustValue(setAttachmentPositionX, attachmentPositionX, 0.5, -5, 5)}
+                        >
+                          +
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="py-1">
+                    <div className="flex justify-between items-center">
+                      <Label className="font-medium">Vertical: {attachmentPositionY}</Label>
+                      <div className="flex space-x-2 mobile-controls">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => adjustValue(setAttachmentPositionY, attachmentPositionY, -0.5, -5, 5)}
+                        >
+                          -
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => adjustValue(setAttachmentPositionY, attachmentPositionY, 0.5, -5, 5)}
+                        >
+                          +
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="py-1">
+                    <div className="flex justify-between items-center">
+                      <Label className="font-medium">Depth: {attachmentPositionZ}</Label>
+                      <div className="flex space-x-2 mobile-controls">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => adjustValue(setAttachmentPositionZ, attachmentPositionZ, -0.5, -5, 5)}
+                        >
+                          -
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => adjustValue(setAttachmentPositionZ, attachmentPositionZ, 0.5, -5, 5)}
+                        >
+                          +
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="charm" className="space-y-3">
+              <div className="bg-card p-3 rounded-xl cute-shadow">
+                <h3 className="text-lg font-medium mb-2 text-card-foreground">Charm Options</h3>
+                
+                <div className="space-y-3">
+                  <div className="py-1">
+                    <div className="flex justify-between items-center">
+                      <Label className="font-medium">Rotate X: {charmRotateX}°</Label>
+                      <div className="flex space-x-2 mobile-controls">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => adjustValue(setCharmRotateX, charmRotateX, -15, -180, 180)}
+                        >
+                          -
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => adjustValue(setCharmRotateX, charmRotateX, 15, -180, 180)}
+                        >
+                          +
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="py-1">
+                    <div className="flex justify-between items-center">
+                      <Label className="font-medium">Rotate Y: {charmRotateY}°</Label>
+                      <div className="flex space-x-2 mobile-controls">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => adjustValue(setCharmRotateY, charmRotateY, -15, -180, 180)}
+                        >
+                          -
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => adjustValue(setCharmRotateY, charmRotateY, 15, -180, 180)}
+                        >
+                          +
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="py-1">
+                    <div className="flex justify-between items-center">
+                      <Label className="font-medium">Rotate Z: {charmRotateZ}°</Label>
+                      <div className="flex space-x-2 mobile-controls">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => adjustValue(setCharmRotateZ, charmRotateZ, -15, -180, 180)}
+                        >
+                          -
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => adjustValue(setCharmRotateZ, charmRotateZ, 15, -180, 180)}
+                        >
+                          +
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
-      </div>
+      )}
+      
+      {/* Desktop view - sidebar */}
+      {!isMobile && (
+        <div className="p-2 md:p-4 overflow-auto max-h-[60vh] md:max-h-[calc(60vh+4rem)]">
+          <div className="space-y-3 md:space-y-6">
+            <div>
+              <h2 className="text-xl md:text-2xl font-medium mb-1 text-foreground">Custom Charm Designer</h2>
+              <p className="text-sm text-muted-foreground mb-3 md:mb-4">Standard charm size: 1 inch (25.4mm)</p>
+              
+              {/* Actions - Add to Cart is more prominent now */}
+              <div className="mb-4 md:mb-6">
+                <Button
+                  onClick={handleAddToCart}
+                  className="w-full bg-theme-dark text-white hover:bg-theme-darkest h-12 text-base"
+                >
+                  <ShoppingCart className="mr-2 h-5 w-5" /> Add to Cart
+                </Button>
+                
+                {/* Export STL moved to a subtle text link below */}
+                {importedMesh && (
+                  <div className="mt-2 text-center">
+                    <button 
+                      onClick={exportSTL}
+                      className="text-xs text-muted-foreground hover:text-foreground underline flex items-center justify-center mx-auto"
+                    >
+                      <Download className="h-3 w-3 mr-1" /> Export STL file
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              {/* Metal Type selection */}
+              <div className="mb-4 md:mb-6 bg-card p-3 md:p-4 rounded-xl cute-shadow">
+                <h3 className="text-lg font-medium mb-2 text-card-foreground">Metal Type</h3>
+                <RadioGroup 
+                  value={materialType} 
+                  onValueChange={(value) => setMaterialType(value as 'gold' | 'silver')}
+                  className="flex gap-4"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="gold" id="gold" />
+                    <Label htmlFor="gold" className="font-medium">Gold</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="silver" id="silver" />
+                    <Label htmlFor="silver" className="font-medium">Silver</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+              
+              {/* Jewelry Type Selection */}
+              <div className="mb-4 md:mb-6 bg-card p-3 md:p-4 rounded-xl cute-shadow">
+                <h3 className="text-lg font-medium mb-2 text-card-foreground">Jewelry Type</h3>
+                <RadioGroup 
+                  value={baseJewelryType} 
+                  onValueChange={(value) => setBaseJewelryType(value as JewelryBaseType)}
+                  className="flex flex-col gap-2"
+                >
+                  <div className="flex items-center space-x-2 py-1">
+                    <RadioGroupItem value="none" id="charm-only" />
+                    <Label htmlFor="charm-only" className="font-medium">Charm Only</Label>
+                  </div>
+                  <div className="flex items-center space-x-2 py-1">
+                    <RadioGroupItem value="necklace" id="necklace" />
+                    <Label htmlFor="necklace" className="font-medium">Charm with Chain (18")</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+              
+              {/* Attachment options */}
+              <Collapsible 
+                open={attachmentOptionsOpen} 
+                onOpenChange={setAttachmentOptionsOpen}
+                className="mb-4 md:mb-6 bg-card p-3 md:p-4 rounded-xl cute-shadow"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-medium text-card-foreground">Attachment Options</h3>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="hover:bg-transparent">
+                      <ChevronDown className={`h-4 w-4 transition-transform ${attachmentOptionsOpen ? "transform rotate-180" : ""}`} />
+                    </Button>
+                  </CollapsibleTrigger>
+                </div>
+                
+                <CollapsibleContent className="space-y-4">
+                  <div className="flex justify-between items-center py-2">
+                    <Label htmlFor="attachment-ring" className="font-medium">Attachment Ring</Label>
+                    <Switch 
+                      id="attachment-ring"
+                      checked={showAttachmentRing} 
+                      onCheckedChange={setShowAttachmentRing}
+                    />
+                  </div>
+                  
+                  <div className="flex justify-between items-center py-2">
+                    <Label htmlFor="extension-bar" className="font-medium">Extension Bar</Label>
+                    <Switch 
+                      id="extension-bar"
+                      checked={showExtensionBar} 
+                      onCheckedChange={setShowExtensionBar}
+                    />
+                  </div>
+                  
+                  {showExtensionBar && (
+                    <div className="space-y-1 py-2">
+                      <div className="flex justify-between">
+                        <Label htmlFor="extension-length" className="font-medium">Extension Length: {extensionLength}mm</Label>
+                      </div>
+                      <Slider 
+                        id="extension-length"
+                        min={1} 
+                        max={10} 
+                        step={0.5} 
+                        value={[extensionLength]} 
+                        onValueChange={(values) => setExtensionLength(values[0])}
+                      />
+                    </div>
+                  )}
+                  
+                  <div className="space-y-1 py-2">
+                    <div className="flex justify-between">
+                      <Label htmlFor="attachment-rotate" className="font-medium">Rotate: {attachmentRotateY}°</Label>
+                    </div>
+                    <Slider 
+                      id="attachment-rotate"
+                      min={-180} 
+                      max={180} 
+                      step={5} 
+                      value={[attachmentRotateY]} 
+                      onValueChange={(values) => setAttachmentRotateY(values[0])}
+                    />
+                  </div>
+                  
+                  {/* Horizontal position */}
+                  <div className="space-y-1 py-2">
+                    <div className="flex justify-between">
+                      <Label htmlFor="attachment-position-x" className="font-medium">Horizontal: {attachmentPositionX}</Label>
+                    </div>
+                    <Slider 
+                      id="attachment-position-x"
+                      min={-5} 
+                      max={5} 
+                      step={0.1} 
+                      value={[attachmentPositionX]} 
+                      onValueChange={(values) => setAttachmentPositionX(values[0])}
+                    />
+                  </div>
+                  
+                  {/* Vertical position */}
+                  <div className="space-y-1 py-2">
+                    <div className="flex justify-between">
+                      <Label htmlFor="attachment-position-y" className="font-medium">Vertical: {attachmentPositionY}</Label>
+                    </div>
+                    <Slider 
+                      id="attachment-position-y"
+                      min={-5} 
+                      max={5} 
+                      step={0.1} 
+                      value={[attachmentPositionY]} 
+                      onValueChange={(values) => setAttachmentPositionY(values[0])}
+                    />
+                  </div>
+                  
+                  {/* Depth position */}
+                  <div className="space-y-1 py-2">
+                    <div className="flex justify-between">
+                      <Label htmlFor="attachment-position-z" className="font-medium">Depth: {attachmentPositionZ}</Label>
+                    </div>
+                    <Slider 
+                      id="attachment-position-z"
+                      min={-5} 
+                      max={5} 
+                      step={0.1} 
+                      value={[attachmentPositionZ]} 
+                      onValueChange={(values) => setAttachmentPositionZ(values[0])}
+                    />
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+              
+              {/* Charm Options */}
+              <Collapsible 
+                className="mb-4 md:mb-6 bg-card p-3 md:p-4 rounded-xl cute-shadow"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-medium text-card-foreground">Charm Options</h3>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="hover:bg-transparent">
+                      <ChevronDown className="h-4 w-4 transition-transform" />
+                    </Button>
+                  </CollapsibleTrigger>
+                </div>
+                
+                <CollapsibleContent className="space-y-4">
+                  <div className="grid grid-cols-1 gap-4">
+                    <div className="space-y-1">
+                      <div className="flex justify-between">
+                        <Label htmlFor="rotate-x" className="font-medium">Rotate X: {charmRotateX}°</Label>
+                      </div>
+                      <Slider 
+                        id="rotate-x"
+                        min={-180} 
+                        max={180} 
+                        step={5} 
+                        value={[charmRotateX]} 
+                        onValueChange={(values) => setCharmRotateX(values[0])}
+                        className="cursor-pointer"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex justify-between">
+                        <Label htmlFor="rotate-y" className="font-medium">Rotate Y: {charmRotateY}°</Label>
+                      </div>
+                      <Slider 
+                        id="rotate-y"
+                        min={-180} 
+                        max={180} 
+                        step={5} 
+                        value={[charmRotateY]} 
+                        onValueChange={(values) => setCharmRotateY(values[0])}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex justify-between">
+                        <Label htmlFor="rotate-z" className="font-medium">Rotate Z: {charmRotateZ}°</Label>
+                      </div>
+                      <Slider 
+                        id="rotate-z"
+                        min={-180} 
+                        max={180} 
+                        step={5} 
+                        value={[charmRotateZ]} 
+                        onValueChange={(values) => setCharmRotateZ(values[0])}
+                      />
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 } 

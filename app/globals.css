@@ -4,7 +4,7 @@
 
 body {
   font-family: var(--font-quicksand), system-ui, sans-serif;
-  background-color: #fafafa;
+  background-color: #ffffff;
 }
 
 @layer utilities {
@@ -37,11 +37,65 @@ body {
   .bg-theme-accent {
     background-color: #6A9CFF;
   }
+  
+  /* 3D Viewer styles */
+  @media (min-width: 768px) {
+    #stl-model-viewer canvas {
+      aspect-ratio: 1.0 / 1.0 !important;
+      max-height: 60vh;
+      width: auto !important;
+      height: auto !important;
+      margin: 0 auto;
+    }
+  }
+  
+  /* Mobile-specific styles for generate page */
+  @media (max-width: 767px) {
+    #stl-model-viewer {
+      margin-bottom: 0;
+      position: relative;
+      z-index: 10;
+    }
+    
+    /* Make buttons easier to tap on mobile */
+    .mobile-controls button {
+      min-height: 36px;
+      min-width: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    /* Tab styling for mobile screens */
+    [role="tablist"] {
+      width: 100%;
+      display: flex;
+      border-radius: 0.5rem;
+      background-color: var(--secondary);
+      padding: 0.25rem;
+      margin-bottom: 0.5rem;
+    }
+    
+    [role="tab"] {
+      flex: 1;
+      padding: 0.5rem;
+      font-size: 0.875rem;
+      text-align: center;
+      border-radius: 0.25rem;
+      transition: all 0.2s;
+    }
+    
+    [role="tab"][data-state="active"] {
+      background-color: white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      font-weight: 500;
+    }
+  }
 }
 
 @layer base {
   :root {
-    --background: 210 30% 98%;
+    --background: 0 0% 100%;
     --foreground: 210 20% 20%;
     --card: 0 0% 100%;
     --card-foreground: 210 20% 20%;
