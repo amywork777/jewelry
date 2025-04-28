@@ -314,9 +314,9 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
           <div>
             <h2 className="text-2xl font-medium mb-4 text-foreground">Jewelry Designer</h2>
             
-            {/* Material selection */}
+            {/* Metal Type selection */}
             <div className="mb-6 bg-card p-4 rounded-xl cute-shadow">
-              <h3 className="text-lg font-medium mb-2 text-card-foreground">Material</h3>
+              <h3 className="text-lg font-medium mb-2 text-card-foreground">Metal Type</h3>
               <RadioGroup 
                 value={materialType} 
                 onValueChange={(value) => setMaterialType(value as 'gold' | 'silver')}
@@ -333,52 +333,83 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
               </RadioGroup>
             </div>
             
-            {/* Charm Rotation */}
+            {/* Jewelry Type Selection */}
             <div className="mb-6 bg-card p-4 rounded-xl cute-shadow">
-              <h3 className="text-lg font-medium mb-2 text-card-foreground">Charm Rotation</h3>
-              <div className="grid grid-cols-1 gap-4">
-                <div className="space-y-1">
-                  <div className="flex justify-between">
-                    <Label htmlFor="rotate-x" className="font-medium">Rotate X: {charmRotateX}°</Label>
-                  </div>
-                  <Slider 
-                    id="rotate-x"
-                    min={-180} 
-                    max={180} 
-                    step={5} 
-                    value={[charmRotateX]} 
-                    onValueChange={(values) => setCharmRotateX(values[0])}
-                    className="cursor-pointer"
-                  />
+              <h3 className="text-lg font-medium mb-2 text-card-foreground">Jewelry Type</h3>
+              <RadioGroup 
+                value={baseJewelryType} 
+                onValueChange={(value) => setBaseJewelryType(value as JewelryBaseType)}
+                className="flex flex-col gap-2"
+              >
+                <div className="flex items-center space-x-2 py-1">
+                  <RadioGroupItem value="none" id="charm-only" />
+                  <Label htmlFor="charm-only" className="font-medium">Charm Only</Label>
                 </div>
-                <div className="space-y-1">
-                  <div className="flex justify-between">
-                    <Label htmlFor="rotate-y" className="font-medium">Rotate Y: {charmRotateY}°</Label>
-                  </div>
-                  <Slider 
-                    id="rotate-y"
-                    min={-180} 
-                    max={180} 
-                    step={5} 
-                    value={[charmRotateY]} 
-                    onValueChange={(values) => setCharmRotateY(values[0])}
-                  />
+                <div className="flex items-center space-x-2 py-1">
+                  <RadioGroupItem value="necklace" id="necklace" />
+                  <Label htmlFor="necklace" className="font-medium">Charm with Chain (18")</Label>
                 </div>
-                <div className="space-y-1">
-                  <div className="flex justify-between">
-                    <Label htmlFor="rotate-z" className="font-medium">Rotate Z: {charmRotateZ}°</Label>
-                  </div>
-                  <Slider 
-                    id="rotate-z"
-                    min={-180} 
-                    max={180} 
-                    step={5} 
-                    value={[charmRotateZ]} 
-                    onValueChange={(values) => setCharmRotateZ(values[0])}
-                  />
-                </div>
-              </div>
+              </RadioGroup>
             </div>
+            
+            {/* Charm Options */}
+            <Collapsible 
+              className="mb-6 bg-card p-4 rounded-xl cute-shadow"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-lg font-medium text-card-foreground">Charm Options</h3>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="hover:bg-transparent">
+                    <ChevronDown className="h-4 w-4 transition-transform" />
+                  </Button>
+                </CollapsibleTrigger>
+              </div>
+              
+              <CollapsibleContent className="space-y-4">
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="space-y-1">
+                    <div className="flex justify-between">
+                      <Label htmlFor="rotate-x" className="font-medium">Rotate X: {charmRotateX}°</Label>
+                    </div>
+                    <Slider 
+                      id="rotate-x"
+                      min={-180} 
+                      max={180} 
+                      step={5} 
+                      value={[charmRotateX]} 
+                      onValueChange={(values) => setCharmRotateX(values[0])}
+                      className="cursor-pointer"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between">
+                      <Label htmlFor="rotate-y" className="font-medium">Rotate Y: {charmRotateY}°</Label>
+                    </div>
+                    <Slider 
+                      id="rotate-y"
+                      min={-180} 
+                      max={180} 
+                      step={5} 
+                      value={[charmRotateY]} 
+                      onValueChange={(values) => setCharmRotateY(values[0])}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between">
+                      <Label htmlFor="rotate-z" className="font-medium">Rotate Z: {charmRotateZ}°</Label>
+                    </div>
+                    <Slider 
+                      id="rotate-z"
+                      min={-180} 
+                      max={180} 
+                      step={5} 
+                      value={[charmRotateZ]} 
+                      onValueChange={(values) => setCharmRotateZ(values[0])}
+                    />
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
             
             {/* Attachment options */}
             <Collapsible 
