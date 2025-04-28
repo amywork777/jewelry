@@ -160,8 +160,8 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
   }
   
   return (
-    <div className="grid grid-cols-1 md:grid-cols-5 h-[85vh] gap-4 font-quicksand">
-      <div className="md:col-span-3 bg-secondary rounded-xl cute-shadow overflow-hidden relative h-full">
+    <div className="grid grid-cols-1 md:grid-cols-5 h-[85vh] md:h-[90vh] gap-2 md:gap-4 font-quicksand">
+      <div className="md:col-span-3 bg-secondary rounded-xl cute-shadow overflow-hidden relative h-[40vh] md:h-full">
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 z-10">
             <div className="bg-card p-4 rounded-xl cute-shadow">
@@ -310,13 +310,14 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
         )}
       </div>
       
-      <div className="md:col-span-2 p-4 overflow-auto">
-        <div className="space-y-6">
+      <div className="md:col-span-2 p-2 md:p-4 overflow-auto max-h-[60vh] md:max-h-none">
+        <div className="space-y-3 md:space-y-6">
           <div>
-            <h2 className="text-2xl font-medium mb-4 text-foreground">Jewelry Designer</h2>
+            <h2 className="text-xl md:text-2xl font-medium mb-1 text-foreground">Jewelry Designer</h2>
+            <p className="text-sm text-muted-foreground mb-3 md:mb-4">Standard charm size: 1 inch (25.4mm)</p>
             
             {/* Metal Type selection */}
-            <div className="mb-6 bg-card p-4 rounded-xl cute-shadow">
+            <div className="mb-4 md:mb-6 bg-card p-3 md:p-4 rounded-xl cute-shadow">
               <h3 className="text-lg font-medium mb-2 text-card-foreground">Metal Type</h3>
               <RadioGroup 
                 value={materialType} 
@@ -335,7 +336,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
             </div>
             
             {/* Jewelry Type Selection */}
-            <div className="mb-6 bg-card p-4 rounded-xl cute-shadow">
+            <div className="mb-4 md:mb-6 bg-card p-3 md:p-4 rounded-xl cute-shadow">
               <h3 className="text-lg font-medium mb-2 text-card-foreground">Jewelry Type</h3>
               <RadioGroup 
                 value={baseJewelryType} 
@@ -357,7 +358,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
             <Collapsible 
               open={attachmentOptionsOpen} 
               onOpenChange={setAttachmentOptionsOpen}
-              className="mb-6 bg-card p-4 rounded-xl cute-shadow"
+              className="mb-4 md:mb-6 bg-card p-3 md:p-4 rounded-xl cute-shadow"
             >
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-lg font-medium text-card-foreground">Attachment Options</h3>
@@ -466,7 +467,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
             
             {/* Charm Options */}
             <Collapsible 
-              className="mb-6 bg-card p-4 rounded-xl cute-shadow"
+              className="mb-4 md:mb-6 bg-card p-3 md:p-4 rounded-xl cute-shadow"
             >
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-lg font-medium text-card-foreground">Charm Options</h3>
@@ -478,9 +479,6 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
               </div>
               
               <CollapsibleContent className="space-y-4">
-                <div className="bg-theme-light p-2 rounded-lg text-center mb-2">
-                  <p className="text-sm text-foreground">Standard charm size: 1 inch (25.4mm)</p>
-                </div>
                 <div className="grid grid-cols-1 gap-4">
                   <div className="space-y-1">
                     <div className="flex justify-between">
@@ -528,9 +526,9 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
             
             {/* Actions */}
             {!readOnly && (
-              <div className="mb-6 bg-card p-4 rounded-xl cute-shadow">
+              <div className="mb-4 md:mb-6 bg-card p-3 md:p-4 rounded-xl cute-shadow">
                 <h3 className="text-lg font-medium mb-2 text-card-foreground">Actions</h3>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <Button 
                     onClick={exportSTL} 
                     variant="outline" 
