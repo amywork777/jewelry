@@ -165,7 +165,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 z-10">
             <div className="bg-card p-4 rounded-xl cute-shadow">
-              <p className="text-card-foreground">Loading model...</p>
+              <p className="text-card-foreground">Creating your charm...</p>
             </div>
           </div>
         )}
@@ -178,7 +178,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                 onClick={() => setLoadError(null)} 
                 className="mt-2 w-full bg-theme-light text-foreground hover:bg-theme-medium"
               >
-                Dismiss
+                Try Again
               </Button>
             </div>
           </div>
@@ -289,7 +289,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
         {!importedMesh && !readOnly && !stlUrl && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 backdrop-blur-sm">
             <div className="bg-card p-6 rounded-xl cute-shadow max-w-md mx-auto">
-              <h3 className="text-lg font-semibold mb-2 text-center text-card-foreground">Add Charm Design</h3>
+              <h3 className="text-lg font-semibold mb-2 text-center text-card-foreground">Design Your Own Charm</h3>
               <p className="text-center text-muted-foreground mb-4">Standard size: 1 inch (25.4mm)</p>
               <ModelImport onImport={handleFileImport} />
             </div>
@@ -304,7 +304,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
               className="bg-card hover:bg-secondary text-foreground border border-border shadow-md"
               size="default"
             >
-              {importedMesh ? "Change Charm Design" : "Add Charm Design"}
+              {importedMesh ? "Change Your Charm" : "Design Your Charm"}
             </Button>
           </div>
         )}
@@ -313,7 +313,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
       <div className="md:col-span-2 p-2 md:p-4 overflow-auto max-h-[60vh] md:max-h-none">
         <div className="space-y-3 md:space-y-6">
           <div>
-            <h2 className="text-xl md:text-2xl font-medium mb-1 text-foreground">Jewelry Designer</h2>
+            <h2 className="text-xl md:text-2xl font-medium mb-1 text-foreground">Custom Charm Designer</h2>
             <p className="text-sm text-muted-foreground mb-3 md:mb-4">Standard charm size: 1 inch (25.4mm)</p>
             
             {/* Metal Type selection */}

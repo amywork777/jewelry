@@ -19,7 +19,7 @@ export default function ModelImport({ onImport }: ModelImportProps) {
     
     const file = acceptedFiles[0]
     if (!file.name.toLowerCase().endsWith('.stl')) {
-      setError('Please upload an STL file')
+      setError('Please upload an STL charm file')
       return
     }
     
@@ -30,7 +30,7 @@ export default function ModelImport({ onImport }: ModelImportProps) {
     reader.onload = (event) => {
       try {
         if (!event.target?.result) {
-          throw new Error('Failed to read file')
+          throw new Error('Failed to read charm file')
         }
         
         const loader = new STLLoader()
@@ -49,14 +49,14 @@ export default function ModelImport({ onImport }: ModelImportProps) {
         onImport(geometry)
         setLoading(false)
       } catch (err) {
-        console.error('Error importing STL:', err)
-        setError('Failed to import STL file')
+        console.error('Error importing charm:', err)
+        setError('Unable to create charm from this file')
         setLoading(false)
       }
     }
     
     reader.onerror = () => {
-      setError('Failed to read file')
+      setError('Failed to read charm file')
       setLoading(false)
     }
     
@@ -80,13 +80,13 @@ export default function ModelImport({ onImport }: ModelImportProps) {
       >
         <input {...getInputProps()} />
         {loading ? (
-          <p className="text-muted-foreground">Processing...</p>
+          <p className="text-muted-foreground">Creating your charm...</p>
         ) : isDragActive ? (
-          <p className="text-primary">Drop the STL file here</p>
+          <p className="text-primary">Drop your charm design here</p>
         ) : (
           <div>
-            <p className="text-card-foreground mb-2">Drag & drop an STL file here, or click to select</p>
-            <Button className="bg-theme-medium hover:bg-theme-dark text-foreground">Add Charm Design</Button>
+            <p className="text-card-foreground mb-2">Drag & drop your STL charm file here, or click to select</p>
+            <Button className="bg-theme-medium hover:bg-theme-dark text-foreground">Upload Your Charm</Button>
           </div>
         )}
       </div>
