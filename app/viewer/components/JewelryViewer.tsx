@@ -328,8 +328,8 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                     {importedMesh ? (
                       <>
                         {/* Fixed Size Notice */}
-                        <div className="text-center mb-2">
-                          <span className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-full">
+                        <div className="mb-3 text-center">
+                          <span className="text-sm text-gray-500 bg-gray-50 px-2 py-1 rounded-full">
                             Standard Size: Approximately 1 inch (25.4mm)
                           </span>
                         </div>
@@ -377,12 +377,12 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                               className="mt-2"
                             >
                               <CollapsibleTrigger className="flex items-center justify-between w-full p-2 text-left bg-gray-50 rounded-md">
-                                <h4 className="text-xs font-medium text-gray-700">Advanced Options</h4>
+                                <h4 className="text-sm font-medium text-gray-700">Advanced Options</h4>
                                 <ChevronDown className={`h-3 w-3 text-gray-500 transition-transform ${attachmentOptionsOpen ? 'transform rotate-180' : ''}`} />
                               </CollapsibleTrigger>
                               <CollapsibleContent className="p-2 pt-2 border-t mt-2">
                                 {showAttachmentRing && (
-                                  <div className="text-xs mb-2">
+                                  <div className="text-sm mb-2">
                                     <div className="flex justify-between">
                                       <Label className="text-gray-600">Ring Size</Label>
                                       <span className="text-gray-900">Fixed at 1.5mm</span>
@@ -392,7 +392,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                                 
                                 {showExtensionBar && (
                                   <div className="space-y-1 mb-2">
-                                    <div className="flex justify-between text-xs">
+                                    <div className="flex justify-between text-sm">
                                       <Label className="text-gray-600">Extension Length</Label>
                                       <span className="text-gray-900">{extensionLength} mm</span>
                                     </div>
@@ -408,7 +408,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                                 )}
                               
                                 <div className="space-y-1 mb-2">
-                                  <div className="flex justify-between text-xs">
+                                  <div className="flex justify-between text-sm">
                                     <Label className="text-gray-600">Y Rotation</Label>
                                     <span className="text-gray-900">{attachmentRotateY}°</span>
                                   </div>
@@ -422,9 +422,28 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                                   />
                                 </div>
                                 
-                                <div className="space-y-1">
-                                  <div className="flex justify-between text-xs">
-                                    <Label className="text-gray-600">Vertical Position</Label>
+                                <div className="mt-4 mb-2">
+                                  <Label className="text-sm font-medium text-gray-700">Position Adjustments</Label>
+                                </div>
+                                
+                                <div className="space-y-1 mb-2">
+                                  <div className="flex justify-between text-sm">
+                                    <Label className="text-gray-600">Horizontal (Left/Right)</Label>
+                                    <span className="text-gray-900">{attachmentPositionX.toFixed(1)}</span>
+                                  </div>
+                                  <Slider 
+                                    value={[attachmentPositionX]} 
+                                    min={-5} 
+                                    max={5} 
+                                    step={0.5} 
+                                    onValueChange={(value) => setAttachmentPositionX(value[0])} 
+                                    className="mt-1"
+                                  />
+                                </div>
+                                
+                                <div className="space-y-1 mb-2">
+                                  <div className="flex justify-between text-sm">
+                                    <Label className="text-gray-600">Vertical (Up/Down)</Label>
                                     <span className="text-gray-900">{attachmentPositionY.toFixed(1)}</span>
                                   </div>
                                   <Slider 
@@ -433,6 +452,21 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                                     max={5} 
                                     step={0.5} 
                                     onValueChange={(value) => setAttachmentPositionY(value[0])} 
+                                    className="mt-1"
+                                  />
+                                </div>
+                                
+                                <div className="space-y-1">
+                                  <div className="flex justify-between text-sm">
+                                    <Label className="text-gray-600">Depth (Front/Back)</Label>
+                                    <span className="text-gray-900">{attachmentPositionZ.toFixed(1)}</span>
+                                  </div>
+                                  <Slider 
+                                    value={[attachmentPositionZ]} 
+                                    min={-5} 
+                                    max={5} 
+                                    step={0.5} 
+                                    onValueChange={(value) => setAttachmentPositionZ(value[0])} 
                                     className="mt-1"
                                   />
                                 </div>
@@ -470,8 +504,8 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                   <TabsContent value="position" className="space-y-3">
                     {importedMesh ? (
                       <>
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-xs">
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-sm">
                             <Label className="text-gray-600">X Rotation (°)</Label>
                             <span className="text-gray-900">{charmRotateX}°</span>
                           </div>
@@ -485,8 +519,8 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                           />
                         </div>
                         
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-xs">
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-sm">
                             <Label className="text-gray-600">Y Rotation (°)</Label>
                             <span className="text-gray-900">{charmRotateY}°</span>
                           </div>
@@ -500,8 +534,8 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                           />
                         </div>
                         
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-xs">
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-sm">
                             <Label className="text-gray-600">Z Rotation (°)</Label>
                             <span className="text-gray-900">{charmRotateZ}°</span>
                           </div>
@@ -532,14 +566,14 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                     {/* Charm Design Section */}
                     <Collapsible className="space-y-2 mb-3" defaultOpen={true}>
                       <CollapsibleTrigger className="flex items-center justify-between w-full text-left">
-                        <h3 className="text-base font-semibold text-gray-900">Charm Design</h3>
+                        <h3 className="text-base font-medium text-gray-900">Charm Design</h3>
                         <ChevronDown className="h-4 w-4 text-gray-500" />
                       </CollapsibleTrigger>
                       <CollapsibleContent>
                         <div className="bg-white rounded-md border border-gray-200 p-3 shadow-sm">
                           {/* Fixed Size Notice */}
                           <div className="mb-3 text-center">
-                            <span className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-full">
+                            <span className="text-sm text-gray-500 bg-gray-50 px-2 py-1 rounded-full">
                               Standard Size: Approximately 1 inch (25.4mm)
                             </span>
                           </div>
@@ -573,7 +607,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                     {/* Attachment Options */}
                     <Collapsible className="space-y-2 mb-3" defaultOpen={true}>
                       <CollapsibleTrigger className="flex items-center justify-between w-full text-left">
-                        <h3 className="text-base font-semibold text-gray-900">Attachment Options</h3>
+                        <h3 className="text-base font-medium text-gray-900">Attachment Options</h3>
                         <ChevronDown className="h-4 w-4 text-gray-500" />
                       </CollapsibleTrigger>
                       <CollapsibleContent>
@@ -603,12 +637,12 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                               className="mt-2"
                             >
                               <CollapsibleTrigger className="flex items-center justify-between w-full p-2 text-left bg-gray-50 rounded-md">
-                                <h4 className="text-xs font-medium text-gray-700">Advanced Options</h4>
+                                <h4 className="text-sm font-medium text-gray-700">Advanced Options</h4>
                                 <ChevronDown className={`h-3 w-3 text-gray-500 transition-transform ${attachmentOptionsOpen ? 'transform rotate-180' : ''}`} />
                               </CollapsibleTrigger>
                               <CollapsibleContent className="p-2 pt-2 border-t mt-2">
                                 {showAttachmentRing && (
-                                  <div className="text-xs mb-2">
+                                  <div className="text-sm mb-2">
                                     <div className="flex justify-between">
                                       <Label className="text-gray-600">Ring Size</Label>
                                       <span className="text-gray-900">Fixed at 1.5mm</span>
@@ -618,7 +652,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                                 
                                 {showExtensionBar && (
                                   <div className="space-y-1 mb-2">
-                                    <div className="flex justify-between text-xs">
+                                    <div className="flex justify-between text-sm">
                                       <Label className="text-gray-600">Extension Length</Label>
                                       <span className="text-gray-900">{extensionLength} mm</span>
                                     </div>
@@ -634,7 +668,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                                 )}
                               
                                 <div className="space-y-1 mb-2">
-                                  <div className="flex justify-between text-xs">
+                                  <div className="flex justify-between text-sm">
                                     <Label className="text-gray-600">Y Rotation</Label>
                                     <span className="text-gray-900">{attachmentRotateY}°</span>
                                   </div>
@@ -648,9 +682,28 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                                   />
                                 </div>
                                 
-                                <div className="space-y-1">
-                                  <div className="flex justify-between text-xs">
-                                    <Label className="text-gray-600">Vertical Position</Label>
+                                <div className="mt-4 mb-2">
+                                  <Label className="text-sm font-medium text-gray-700">Position Adjustments</Label>
+                                </div>
+                                
+                                <div className="space-y-1 mb-2">
+                                  <div className="flex justify-between text-sm">
+                                    <Label className="text-gray-600">Horizontal (Left/Right)</Label>
+                                    <span className="text-gray-900">{attachmentPositionX.toFixed(1)}</span>
+                                  </div>
+                                  <Slider 
+                                    value={[attachmentPositionX]} 
+                                    min={-5} 
+                                    max={5} 
+                                    step={0.5} 
+                                    onValueChange={(value) => setAttachmentPositionX(value[0])} 
+                                    className="mt-1"
+                                  />
+                                </div>
+                                
+                                <div className="space-y-1 mb-2">
+                                  <div className="flex justify-between text-sm">
+                                    <Label className="text-gray-600">Vertical (Up/Down)</Label>
                                     <span className="text-gray-900">{attachmentPositionY.toFixed(1)}</span>
                                   </div>
                                   <Slider 
@@ -659,6 +712,21 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                                     max={5} 
                                     step={0.5} 
                                     onValueChange={(value) => setAttachmentPositionY(value[0])} 
+                                    className="mt-1"
+                                  />
+                                </div>
+                                
+                                <div className="space-y-1">
+                                  <div className="flex justify-between text-sm">
+                                    <Label className="text-gray-600">Depth (Front/Back)</Label>
+                                    <span className="text-gray-900">{attachmentPositionZ.toFixed(1)}</span>
+                                  </div>
+                                  <Slider 
+                                    value={[attachmentPositionZ]} 
+                                    min={-5} 
+                                    max={5} 
+                                    step={0.5} 
+                                    onValueChange={(value) => setAttachmentPositionZ(value[0])} 
                                     className="mt-1"
                                   />
                                 </div>
@@ -673,7 +741,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
 
                 {/* Jewelry Type Section - moved down */}
                 <div className="space-y-2 mb-3">
-                  <h3 className="text-base font-semibold text-gray-900">Jewelry Type</h3>
+                  <h3 className="text-base font-medium text-gray-900">Jewelry Type</h3>
                   <div className="bg-white rounded-md border border-gray-200 p-3 shadow-sm">
                     <RadioGroup 
                       value={baseJewelryType} 
@@ -701,13 +769,13 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                 {importedMesh && (
                   <Collapsible className="space-y-2 mb-3">
                     <CollapsibleTrigger className="flex items-center justify-between w-full text-left">
-                      <h3 className="text-base font-semibold text-gray-900">Positioning Controls</h3>
+                      <h3 className="text-base font-medium text-gray-900">Positioning Controls</h3>
                       <ChevronDown className="h-4 w-4 text-gray-500" />
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <div className="bg-white rounded-md border border-gray-200 p-3 shadow-sm space-y-3">
                         <div className="space-y-1">
-                          <div className="flex justify-between text-xs">
+                          <div className="flex justify-between text-sm">
                             <Label className="text-gray-600">X Rotation (°)</Label>
                             <span className="text-gray-900">{charmRotateX}°</span>
                           </div>
@@ -722,7 +790,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                         </div>
                         
                         <div className="space-y-1">
-                          <div className="flex justify-between text-xs">
+                          <div className="flex justify-between text-sm">
                             <Label className="text-gray-600">Y Rotation (°)</Label>
                             <span className="text-gray-900">{charmRotateY}°</span>
                           </div>
@@ -737,7 +805,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                         </div>
                         
                         <div className="space-y-1">
-                          <div className="flex justify-between text-xs">
+                          <div className="flex justify-between text-sm">
                             <Label className="text-gray-600">Z Rotation (°)</Label>
                             <span className="text-gray-900">{charmRotateZ}°</span>
                           </div>
@@ -782,7 +850,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
       ) : (
         <div className="md:col-span-2 h-full border-l border-gray-200">
           <div className="overflow-y-auto h-full p-3 space-y-3">
-            <h2 className="text-lg font-semibold text-gray-900 md:block hidden">Model Preview</h2>
+            <h2 className="text-lg font-medium text-gray-900 md:block hidden">Model Preview</h2>
             
             {/* Mobile view */}
             <div className="md:hidden">
@@ -794,8 +862,8 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                 
                 <TabsContent value="material" className="space-y-3">
                   {/* Fixed Size Notice */}
-                  <div className="text-center mb-2">
-                    <span className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-full">
+                  <div className="mb-3 text-center">
+                    <span className="text-sm text-gray-500 bg-gray-50 px-2 py-1 rounded-full">
                       Standard Size: Approximately 1 inch (25.4mm)
                     </span>
                   </div>
@@ -818,7 +886,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                 
                 <TabsContent value="rotation" className="space-y-3">
                   <div className="space-y-1">
-                    <div className="flex justify-between text-xs">
+                    <div className="flex justify-between text-sm">
                       <Label className="text-gray-600">Y Rotation</Label>
                       <span className="text-gray-900">{charmRotateY}°</span>
                     </div>
@@ -840,7 +908,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
               {/* Fixed Size Notice */}
               <div className="bg-white rounded-md border border-gray-200 p-3 shadow-sm">
                 <div className="text-center">
-                  <span className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-full">
+                  <span className="text-sm text-gray-500 bg-gray-50 px-2 py-1 rounded-full">
                     Standard Size: Approximately 1 inch (25.4mm)
                   </span>
                 </div>
@@ -875,7 +943,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                 </CollapsibleTrigger>
                 <CollapsibleContent className="bg-white border border-gray-200 rounded-md p-3 shadow-sm">
                   <div className="space-y-1">
-                    <div className="flex justify-between text-xs">
+                    <div className="flex justify-between text-sm">
                       <Label className="text-gray-600">Y Rotation</Label>
                       <span className="text-gray-900">{charmRotateY}°</span>
                     </div>
