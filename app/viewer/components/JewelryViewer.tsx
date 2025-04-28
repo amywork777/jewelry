@@ -5,7 +5,7 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls, useGLTF, Stage, Environment, Bounds, PerspectiveCamera } from '@react-three/drei'
 import * as THREE from 'three'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader'
-import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter'
+import { STLExporter } from 'three/examples/jsm/exporters/STLExporter'
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
@@ -126,15 +126,15 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
     // Create a clone of the scene to export
     const exportScene = sceneRef.current.clone()
     
-    // Convert to a single mesh
-    const exporter = new OBJExporter()
-    const obj = exporter.parse(exportScene)
+    // Convert to STL format using binary for better quality
+    const exporter = new STLExporter()
+    const stl = exporter.parse(exportScene, { binary: true })
     
     // Create a download link
-    const blob = new Blob([obj], { type: 'text/plain' })
+    const blob = new Blob([stl], { type: 'application/octet-stream' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
-    link.download = `jewelry-charm.obj`
+    link.download = `jewelry-charm.stl`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
