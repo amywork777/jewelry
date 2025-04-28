@@ -229,7 +229,7 @@ export function ModelGenerator() {
     
     toast({
       title: "Reset Complete",
-      description: "Ready to generate a new 3D model!",
+      description: "Ready to generate a new charm!",
     });
   };
 
@@ -317,7 +317,7 @@ export function ModelGenerator() {
             (button as any)._trackingAdded = true;
             
             button.addEventListener('click', function() {
-              console.log('Generate 3D Model clicked');
+              console.log('Generate Charm clicked');
               
               // Notify the parent (FISHCAD) about the generation
               if (window.parent !== window) {
@@ -612,13 +612,13 @@ export function ModelGenerator() {
           
           toast({
             title: analysisResponse.ok ? "Image Analyzed" : "Using Fallback Description",
-            description: "Creating 3D model based on the description...",
+            description: "Creating charm based on the description...",
           });
         } else if (analysisResponse.ok && analysisData.description === "") {
           // Handle empty description from a successful response
           // console.warn("Image analysis returned empty description, falling back to direct prompt");
           description = imageTextPrompt || 
-            `Create a 3D model based on the uploaded image. ${
+            `Create a charm based on the uploaded image. ${
               selectedImageTextFile.name ? `The image filename is: ${selectedImageTextFile.name}.` : ''
             }`;
             
@@ -630,7 +630,7 @@ export function ModelGenerator() {
           // Handle unsuccessful response without description
           // console.warn("Image analysis failed, falling back to direct prompt");
           description = imageTextPrompt || 
-            `Create a 3D model based on the uploaded image. ${
+            `Create a charm based on the uploaded image. ${
               selectedImageTextFile.name ? `The image filename is: ${selectedImageTextFile.name}.` : ''
             }`;
             
@@ -643,7 +643,7 @@ export function ModelGenerator() {
         // console.warn("Error during image analysis:", error);
         // Fallback to direct text description if analysis fails
         description = imageTextPrompt || 
-          `Create a 3D model based on the uploaded image. ${
+          `Create a charm based on the uploaded image. ${
             selectedImageTextFile.name ? `The image filename is: ${selectedImageTextFile.name}.` : ''
           }`;
           
@@ -657,7 +657,7 @@ export function ModelGenerator() {
       
       // Ensure we have some description to send
       if (!description) {
-        description = `Create a 3D model based on the uploaded image. ${
+        description = `Create a charm based on the uploaded image. ${
           selectedImageTextFile.name ? `The image filename is: ${selectedImageTextFile.name}.` : ''
         }`;
       }
@@ -912,8 +912,8 @@ export function ModelGenerator() {
         // Automatically start STL conversion when model is ready
         if (finalModelUrl) {
           toast({
-            title: "Processing STL",
-            description: "Converting your 3D model to STL format...",
+            title: "Processing",
+            description: "Converting your charm to STL format...",
           });
           
           // Start STL conversion
@@ -932,15 +932,15 @@ export function ModelGenerator() {
         }
         
         toast({
-          title: "Success!",
-          description: "Your 3D model has been generated successfully.",
+          title: "Success",
+          description: "Your charm has been generated successfully.",
         });
 
         // Send generation completion message to parent window if in iframe
         if (window !== window.parent) {
           const modelInfo = {
             modelUrl: data.modelUrl || data.baseModelUrl,
-            prompt: inputType === "text" ? textPrompt : "Image-based 3D model",
+            prompt: inputType === "text" ? textPrompt : "Image-based charm",
             generationMethod: inputType === "text" ? "text-to-3d" : "image-to-3d",
             timestamp: new Date().toISOString(),
             taskId: taskId,
@@ -1096,7 +1096,7 @@ export function ModelGenerator() {
       }
       stlViewerRef.appendChild(renderer.domElement);
 
-      // Add orbit controls
+      // Add orbit controls with constraints to prevent going out of view
       controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
       controls.dampingFactor = 0.2;
@@ -1104,6 +1104,21 @@ export function ModelGenerator() {
       controls.enableZoom = true;
       controls.autoRotate = true;
       controls.autoRotateSpeed = 0.5;
+      
+      // Add constraints to prevent the model from rotating out of view
+      controls.minPolarAngle = Math.PI / 3; // More restrictive - limit how high user can orbit (60 degrees)
+      controls.maxPolarAngle = Math.PI * 2/3; // More restrictive - limit how low user can orbit (120 degrees)
+      
+      // Limit zoom to prevent getting too close or too far
+      controls.minDistance = 5;
+      controls.maxDistance = 12;
+      
+      // Disable panning completely
+      controls.enablePan = false;
+      
+      // Disable rotation around Z-axis
+      controls.minAzimuthAngle = -Math.PI / 2; // Limit horizontal rotation to 90 degrees left
+      controls.maxAzimuthAngle = Math.PI / 2;  // Limit horizontal rotation to 90 degrees right
 
       // Add lighting for better shininess
       // Main directional light (like sunlight)
@@ -1273,15 +1288,15 @@ export function ModelGenerator() {
 
   return (
     <div className="w-full max-w-4xl mx-auto">
-      <Card>
+      <Card className="overflow-visible">
         <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-xl sm:text-2xl text-center">3D Model Generator</CardTitle>
+          <CardTitle className="text-xl sm:text-2xl text-center">Charm Design Generator</CardTitle>
           <CardDescription className="text-center text-sm sm:text-base">
-            Create detailed 3D models from text descriptions or images. Perfect for characters, creatures, and organic shapes.
+            Create beautiful charm designs from text descriptions or images. Perfect for pendants, charms, and custom jewelry pieces.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-3 sm:p-6">
-          <Tabs defaultValue="text" className="w-full" onValueChange={(v) => setInputType(v as InputType)}>
+        <CardContent className="p-3 sm:p-6 overflow-visible">
+          <Tabs defaultValue="text" className="w-full overflow-visible" onValueChange={(v) => setInputType(v as InputType)}>
             <TabsList className="grid w-full grid-cols-2 mb-4">
               <TabsTrigger value="text" className="text-xs sm:text-sm py-1.5 px-2">
                 Text
@@ -1290,11 +1305,11 @@ export function ModelGenerator() {
                 Image
               </TabsTrigger>
             </TabsList>
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-visible">
               <TabsContent value="text" className="space-y-4">
                 <div className="relative">
                   <Textarea
-                    placeholder="Describe your 3D model in detail (e.g., a blue dolphin with a curved fin, swimming)"
+                    placeholder="Describe your charm in detail (e.g., a blue dolphin with a curved fin, swimming)"
                     value={textPrompt}
                     onChange={(e) => setTextPrompt(e.target.value)}
                     disabled={isGenerating}
@@ -1316,7 +1331,7 @@ export function ModelGenerator() {
                   </Button>
                 </div>
                 <p className="text-xs text-gray-500 -mt-2">
-                  Tip: Describe one object at a time for best results. For example, "a golden ring with a diamond" instead of "a ring and a necklace".
+                  Tip: Describe one object at a time for best results.
                 </p>
               </TabsContent>
               <TabsContent value="image" className="space-y-4">
@@ -1378,15 +1393,15 @@ export function ModelGenerator() {
                     ></div>
                   </div>
                   <p className="text-center text-xs sm:text-sm text-gray-500">
-                    {status === "uploading" ? "Uploading image" : "Generating 3D model"}: {progress}%
+                    {status === "uploading" ? "Uploading image" : "Generating charm"}: {progress}%
                   </p>
                 </div>
               )}
 
               {/* STL Viewer */}
               {status === "completed" && (
-                <div className="my-2 sm:mb-4 bg-gray-100 rounded-lg overflow-hidden border" 
-                     style={{ height: "180px", minHeight: "180px" }}
+                <div className="my-2 sm:mb-4 bg-gray-100 rounded-lg overflow-visible border" 
+                     style={{ height: "350px", minHeight: "350px" }}
                      id="stl-model-viewer">
                   {isConvertingStl ? (
                     <div className="w-full h-full flex flex-col items-center justify-center">
@@ -1396,7 +1411,7 @@ export function ModelGenerator() {
                   ) : !stlUrl && !stlBlob ? (
                     <div className="w-full h-full flex flex-col items-center justify-center">
                       <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
-                      <p className="text-sm text-gray-600">Preparing 3D model...</p>
+                      <p className="text-sm text-gray-600">Preparing charm...</p>
                     </div>
                   ) : (
                     <div 
@@ -1492,7 +1507,7 @@ export function ModelGenerator() {
                   ) : (
                     <>
                       <Wand2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                      <span className="text-xs sm:text-sm">Generate 3D Model</span>
+                      <span className="text-xs sm:text-sm">Generate Charm</span>
                     </>
                   )}
                 </Button>

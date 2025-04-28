@@ -17,29 +17,128 @@ export function CustomModelGenerator() {
         // Find the STL viewer element by ID
         const stlViewer = document.getElementById('stl-model-viewer');
         if (stlViewer) {
-          stlViewer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } else {
-          // Fallback to class selector if ID is not found
-          const fallbackViewer = document.querySelector('[class*="bg-gray-100 rounded-lg overflow-hidden border"]');
-          if (fallbackViewer) {
-            fallbackViewer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
+          // Fix any scrollable container issues
+          fixScrollableContainers(stlViewer);
+          // Use a more gentle scroll that works with the page
+          window.scrollTo({
+            top: stlViewer.getBoundingClientRect().top + window.scrollY - 100,
+            behavior: 'smooth'
+          });
         }
       }, 500);
+    };
+
+    // Helper function to fix scrollable containers
+    const fixScrollableContainers = (element: HTMLElement) => {
+      // Fix the element itself
+      if (getComputedStyle(element).overflow === 'auto' || 
+          getComputedStyle(element).overflow === 'scroll') {
+        element.style.overflow = 'visible';
+      }
+      
+      // Fix any parent with scrollable content
+      let parent = element.parentElement;
+      while (parent) {
+        const style = getComputedStyle(parent);
+        // Check for scrollable containers that aren't the main page scroll
+        if ((style.overflow === 'auto' || style.overflow === 'scroll' || 
+             style.overflowY === 'auto' || style.overflowY === 'scroll') && 
+            parent.tagName !== 'HTML' && parent.tagName !== 'BODY') {
+          parent.style.overflow = 'visible';
+          parent.style.overflowY = 'visible';
+        }
+        parent = parent.parentElement;
+      }
     };
 
     // Add event listener
     document.addEventListener('stlGenerated', handleStlGenerated);
     
+    // Apply fixes on load and periodically to ensure they take effect
+    const applyFixesInterval = setInterval(() => {
+      // Find and fix the STL viewer
+      const stlViewer = document.getElementById('stl-model-viewer');
+      if (stlViewer) {
+        fixScrollableContainers(stlViewer);
+      }
+      
+      // Also find and fix any card elements that might be scrollable
+      const cards = document.querySelectorAll('.border, .card, [role="tabpanel"]');
+      cards.forEach(card => {
+        if (card instanceof HTMLElement) {
+          if (getComputedStyle(card).overflow !== 'visible') {
+            card.style.overflow = 'visible';
+          }
+          if (getComputedStyle(card).overflowY !== 'visible') {
+            card.style.overflowY = 'visible';
+          }
+        }
+      });
+      
+      // Fix any containers with max-height
+      const containers = document.querySelectorAll('div');
+      containers.forEach(container => {
+        if (container instanceof HTMLElement) {
+          const style = getComputedStyle(container);
+          if (style.maxHeight !== 'none' && style.overflow === 'auto') {
+            container.style.maxHeight = 'none';
+            container.style.overflow = 'visible';
+          }
+        }
+      });
+    }, 1000);
+    
     // Clean up
     return () => {
       document.removeEventListener('stlGenerated', handleStlGenerated);
+      clearInterval(applyFixesInterval);
     };
   }, []);
 
   // Function to fix layout issues and remove unwanted content
   useEffect(() => {
     if (!originalComponentRef.current) return;
+
+    // Add global style to fix scrolling issues
+    const addGlobalStyle = () => {
+      const styleId = 'custom-model-generator-styles';
+      if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+          /* Force all elements to not create their own scrollable context */
+          div, section, article, aside, main, nav, header, footer {
+            overflow: visible !important;
+            overflow-y: visible !important;
+            max-height: none !important;
+          }
+          
+          /* Only allow scrolling on body and html */
+          html, body {
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+          }
+          
+          /* Fix container sizes */
+          #stl-model-viewer {
+            height: 350px !important;
+            min-height: 350px !important;
+          }
+          
+          /* Fix for mobile */
+          @media (max-width: 640px) {
+            #stl-model-viewer {
+              height: 400px !important;
+              min-height: 400px !important;
+            }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+    };
+    
+    // Add the global style immediately
+    addGlobalStyle();
 
     const applyChanges = () => {
       try {
@@ -60,7 +159,10 @@ export function CustomModelGenerator() {
         // Style the card component
         const mainCard = document.querySelector('[role="tabpanel"]')?.closest('.border');
         if (mainCard) {
-          mainCard.className = 'bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden';
+          mainCard.className = 'bg-white border border-gray-200 rounded-xl shadow-sm overflow-visible';
+          // Ensure the card has no height restrictions
+          (mainCard as HTMLElement).style.maxHeight = 'none';
+          (mainCard as HTMLElement).style.overflow = 'visible';
         }
 
         // Style the card header
@@ -72,14 +174,14 @@ export function CustomModelGenerator() {
           const title = cardHeader.querySelector('.text-xl.sm\\:text-2xl');
           if (title) {
             title.className = 'text-xl font-light tracking-tight mb-2 text-center';
-            title.textContent = '3D Model Studio';
+            title.textContent = 'Charm Designer Studio';
           }
           
           // Style the description
           const description = cardHeader.querySelector('.text-center.text-sm');
           if (description) {
             description.className = 'text-gray-500 text-sm text-center';
-            description.textContent = 'Design, generate, and customize detailed 3D models';
+            description.textContent = 'Design, generate, and customize beautiful charm designs';
           }
         }
 
@@ -178,8 +280,25 @@ export function CustomModelGenerator() {
         if (cardContent && !document.querySelector('.text-xs.text-gray-400.mt-2')) {
           const helpText = document.createElement('p');
           helpText.className = 'text-xs text-gray-400 mt-2 text-center w-full';
-          helpText.textContent = 'Try "minimal gold ring" or "modern geometric sculpture"';
+          helpText.textContent = 'Try "minimalist heart" or "geometric butterfly"';
           cardContent.appendChild(helpText);
+        }
+        
+        // Fix the STL viewer overflow issues
+        const stlViewer = document.getElementById('stl-model-viewer');
+        if (stlViewer) {
+          stlViewer.style.overflow = 'visible';
+          let parent = stlViewer.parentElement;
+          while (parent) {
+            const style = getComputedStyle(parent);
+            if ((style.overflow === 'auto' || style.overflow === 'scroll' || 
+                 style.overflowY === 'auto' || style.overflowY === 'scroll') && 
+                parent.tagName !== 'HTML' && parent.tagName !== 'BODY') {
+              parent.style.overflow = 'visible';
+              parent.style.overflowY = 'visible';
+            }
+            parent = parent.parentElement;
+          }
         }
         
         // Remove any additional FISHCAD references
@@ -195,6 +314,37 @@ export function CustomModelGenerator() {
                 parent.closest('.p-3.border.border-gray-200.rounded-md')) {
               const section = parent.closest('.p-3.border.border-gray-200.rounded-md');
               section?.remove();
+            }
+          }
+        });
+
+        // Apply global fix for any scrollable containers
+        document.querySelectorAll('div').forEach(div => {
+          const element = div as HTMLElement;
+          const style = getComputedStyle(element);
+          
+          // Skip the body and html elements
+          if (element.tagName === 'HTML' || element.tagName === 'BODY') {
+            return;
+          }
+          
+          // Check if this element has a scrollable context
+          if (style.overflow === 'auto' || 
+              style.overflow === 'scroll' || 
+              style.overflowY === 'auto' || 
+              style.overflowY === 'scroll') {
+            
+            // Make it visible instead
+            element.style.overflow = 'visible';
+            element.style.overflowY = 'visible';
+            
+            // If it has a height or max-height set, remove those constraints
+            if (style.height !== 'auto' && style.height !== '' && !style.height.includes('100')) {
+              element.style.height = 'auto';
+            }
+            
+            if (style.maxHeight !== 'none' && style.maxHeight !== '') {
+              element.style.maxHeight = 'none';
             }
           }
         });
