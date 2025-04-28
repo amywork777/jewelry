@@ -289,7 +289,8 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
         {!importedMesh && !readOnly && !stlUrl && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 backdrop-blur-sm">
             <div className="bg-card p-6 rounded-xl cute-shadow max-w-md mx-auto">
-              <h3 className="text-lg font-semibold mb-4 text-center text-card-foreground">Add Charm Design</h3>
+              <h3 className="text-lg font-semibold mb-2 text-center text-card-foreground">Add Charm Design</h3>
+              <p className="text-center text-muted-foreground mb-4">Standard size: 1 inch (25.4mm)</p>
               <ModelImport onImport={handleFileImport} />
             </div>
           </div>
@@ -477,6 +478,9 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
               </div>
               
               <CollapsibleContent className="space-y-4">
+                <div className="bg-theme-light p-2 rounded-lg text-center mb-2">
+                  <p className="text-sm text-foreground">Standard charm size: 1 inch (25.4mm)</p>
+                </div>
                 <div className="grid grid-cols-1 gap-4">
                   <div className="space-y-1">
                     <div className="flex justify-between">
