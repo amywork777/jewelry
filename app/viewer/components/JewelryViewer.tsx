@@ -161,22 +161,22 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
   
   return (
     <div className="grid grid-cols-1 md:grid-cols-5 h-[85vh] gap-4 font-quicksand">
-      <div className="md:col-span-3 bg-gray-50 rounded-xl cute-shadow overflow-hidden relative h-full">
+      <div className="md:col-span-3 bg-secondary rounded-xl cute-shadow overflow-hidden relative h-full">
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 z-10">
-            <div className="bg-white p-4 rounded-xl cute-shadow">
-              <p className="text-gray-600">Loading model...</p>
+            <div className="bg-card p-4 rounded-xl cute-shadow">
+              <p className="text-card-foreground">Loading model...</p>
             </div>
           </div>
         )}
         
         {loadError && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 z-10">
-            <div className="bg-white p-4 rounded-xl cute-shadow">
-              <p className="text-red-500">Error: {loadError}</p>
+            <div className="bg-card p-4 rounded-xl cute-shadow">
+              <p className="text-destructive">Error: {loadError}</p>
               <Button 
                 onClick={() => setLoadError(null)} 
-                className="mt-2 w-full bg-pastel-pink text-gray-700 hover:bg-pink-200"
+                className="mt-2 w-full bg-theme-light text-foreground hover:bg-theme-medium"
               >
                 Dismiss
               </Button>
@@ -288,8 +288,8 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
         {/* Overlay for STL upload if no mesh is imported and not in readOnly mode */}
         {!importedMesh && !readOnly && !stlUrl && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 backdrop-blur-sm">
-            <div className="bg-white p-6 rounded-lg shadow-lg max-w-md mx-auto">
-              <h3 className="text-lg font-semibold mb-4 text-center">Add Charm Design</h3>
+            <div className="bg-card p-6 rounded-xl cute-shadow max-w-md mx-auto">
+              <h3 className="text-lg font-semibold mb-4 text-center text-card-foreground">Add Charm Design</h3>
               <ModelImport onImport={handleFileImport} />
             </div>
           </div>
@@ -300,7 +300,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
           <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2">
             <Button
               onClick={() => setImportedMesh(null)}
-              className="bg-white hover:bg-gray-100 text-gray-800 border border-gray-200 shadow-md"
+              className="bg-card hover:bg-secondary text-foreground border border-border shadow-md"
               size="default"
             >
               {importedMesh ? "Change Charm Design" : "Add Charm Design"}
@@ -312,11 +312,11 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
       <div className="md:col-span-2 p-4 overflow-auto">
         <div className="space-y-6">
           <div>
-            <h2 className="text-2xl font-medium mb-4 text-gray-800">Jewelry Designer</h2>
+            <h2 className="text-2xl font-medium mb-4 text-foreground">Jewelry Designer</h2>
             
             {/* Material selection */}
-            <div className="mb-6 bg-white p-4 rounded-xl cute-shadow">
-              <h3 className="text-lg font-medium mb-2 text-gray-700">Material</h3>
+            <div className="mb-6 bg-card p-4 rounded-xl cute-shadow">
+              <h3 className="text-lg font-medium mb-2 text-card-foreground">Material</h3>
               <RadioGroup 
                 value={materialType} 
                 onValueChange={(value) => setMaterialType(value as 'gold' | 'silver')}
@@ -334,8 +334,8 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
             </div>
             
             {/* Charm Rotation */}
-            <div className="mb-6 bg-white p-4 rounded-xl cute-shadow">
-              <h3 className="text-lg font-medium mb-2 text-gray-700">Charm Rotation</h3>
+            <div className="mb-6 bg-card p-4 rounded-xl cute-shadow">
+              <h3 className="text-lg font-medium mb-2 text-card-foreground">Charm Rotation</h3>
               <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-1">
                   <div className="flex justify-between">
@@ -384,10 +384,10 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
             <Collapsible 
               open={attachmentOptionsOpen} 
               onOpenChange={setAttachmentOptionsOpen}
-              className="mb-6 bg-white p-4 rounded-xl cute-shadow"
+              className="mb-6 bg-card p-4 rounded-xl cute-shadow"
             >
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-medium text-gray-700">Attachment Options</h3>
+                <h3 className="text-lg font-medium text-card-foreground">Attachment Options</h3>
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" size="sm" className="hover:bg-transparent">
                     <ChevronDown className={`h-4 w-4 transition-transform ${attachmentOptionsOpen ? "transform rotate-180" : ""}`} />
@@ -493,28 +493,28 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
             
             {/* File Import */}
             {!readOnly && !stlUrl && (
-              <div className="mb-6 bg-white p-4 rounded-xl cute-shadow">
-                <h3 className="text-lg font-medium mb-2 text-gray-700">Import Model</h3>
-                <ModelImport onFileImport={handleFileImport} />
+              <div className="mb-6 bg-card p-4 rounded-xl cute-shadow">
+                <h3 className="text-lg font-medium mb-2 text-card-foreground">Import Model</h3>
+                <ModelImport onImport={handleFileImport} />
               </div>
             )}
             
             {/* Actions */}
             {!readOnly && (
-              <div className="mb-6 bg-white p-4 rounded-xl cute-shadow">
-                <h3 className="text-lg font-medium mb-2 text-gray-700">Actions</h3>
+              <div className="mb-6 bg-card p-4 rounded-xl cute-shadow">
+                <h3 className="text-lg font-medium mb-2 text-card-foreground">Actions</h3>
                 <div className="grid grid-cols-2 gap-2">
                   <Button 
                     onClick={exportSTL} 
                     variant="outline" 
-                    className="w-full border-gray-300 bg-white hover:bg-gray-50 text-gray-700"
+                    className="w-full border-border bg-card hover:bg-secondary text-foreground"
                   >
                     Export Charm
                   </Button>
                   
                   <Button 
                     onClick={handleAddToCart} 
-                    className="w-full bg-gradient-to-r from-[#FFD6E0] to-[#FFC1D6] text-gray-700 hover:opacity-90"
+                    className="w-full bg-gradient-to-r from-theme-light to-theme-medium text-foreground hover:opacity-90"
                   >
                     Add to Cart
                   </Button>
