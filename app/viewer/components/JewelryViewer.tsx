@@ -59,7 +59,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
   // Attachment options
   const [showAttachmentRing, setShowAttachmentRing] = useState(true)
   const [showExtensionBar, setShowExtensionBar] = useState(false)
-  const fixedRingSize = 1.5; // Fixed ring size - no longer a state variable
+  const fixedRingSize = 0.5; // Updated thickness - was 1.5 before
   const [extensionLength, setExtensionLength] = useState(3)
   
   // Attachment controls
@@ -270,7 +270,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                             0
                           ]}
                         >
-                          <torusGeometry args={[1.5, 1.5 / 5, 16, 32]} />
+                          <torusGeometry args={[1.5, 0.5, 16, 32]} />
                           <meshStandardMaterial
                             {...materialProperties[materialType]}
                           />
@@ -385,7 +385,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                                   <div className="text-sm mb-2">
                                     <div className="flex justify-between">
                                       <Label className="text-gray-600">Ring Size</Label>
-                                      <span className="text-gray-900">Fixed at 1.5mm</span>
+                                      <span className="text-gray-900">Fixed at 0.5mm thickness</span>
                                     </div>
                                   </div>
                                 )}
@@ -645,7 +645,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                                   <div className="text-sm mb-2">
                                     <div className="flex justify-between">
                                       <Label className="text-gray-600">Ring Size</Label>
-                                      <span className="text-gray-900">Fixed at 1.5mm</span>
+                                      <span className="text-gray-900">Fixed at 0.5mm thickness</span>
                                     </div>
                                   </div>
                                 )}
