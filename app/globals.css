@@ -38,6 +38,27 @@ body {
     background-color: #6A9CFF;
   }
   
+  /* Animation for auto-scroll highlight */
+  @keyframes gentle-highlight {
+    0% { box-shadow: 0 0 0 0 rgba(138, 181, 255, 0); }
+    40% { box-shadow: 0 0 0 10px rgba(138, 181, 255, 0.2); }
+    100% { box-shadow: 0 0 0 0 rgba(138, 181, 255, 0); }
+  }
+  
+  .scroll-highlight {
+    animation: gentle-highlight 2s ease-out;
+  }
+  
+  /* Scroll button bounce animation */
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(5px); }
+  }
+  
+  .bounce-animation {
+    animation: bounce 2s infinite;
+  }
+  
   /* 3D Viewer styles */
   @media (min-width: 768px) {
     #stl-model-viewer canvas {
