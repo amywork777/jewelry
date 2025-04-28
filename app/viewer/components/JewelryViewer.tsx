@@ -491,14 +491,6 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
               </CollapsibleContent>
             </Collapsible>
             
-            {/* File Import */}
-            {!readOnly && !stlUrl && (
-              <div className="mb-6 bg-card p-4 rounded-xl cute-shadow">
-                <h3 className="text-lg font-medium mb-2 text-card-foreground">Import Model</h3>
-                <ModelImport onImport={handleFileImport} />
-              </div>
-            )}
-            
             {/* Actions */}
             {!readOnly && (
               <div className="mb-6 bg-card p-4 rounded-xl cute-shadow">
