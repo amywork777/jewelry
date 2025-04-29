@@ -1,353 +1,448 @@
-import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import { NextRequest, NextResponse } from "next/server";
+import OpenAI from "openai";
+import { join } from "path";
+import { writeFile, mkdir } from "fs/promises";
+import { existsSync } from "fs";
 
-export const maxDuration = 60;
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-// Add rate limiting with exponential backoff
-async function callWithRetry(fn, maxRetries = 3) {
-  let retries = 0;
+// Initialize Tripo API key
+const TRIPO_API_KEY = process.env.TRIPO_API_KEY;
+
+// Default base prompt to generate a minimalist jewelry image
+const DEFAULT_PROMPT = `Create a minimalist, elegant piece of jewelry. The image should have a clean background, preferably white or a light neutral color. The jewelry piece should be the central focus, with sleek lines and a modern aesthetic. Ideal for a high-end jewelry product catalog. The rendering should be photorealistic with good lighting to highlight the material's texture and shine.`;
+
+// 2.5D charm specific prompt
+const CHARM_PROMPT = `Create a 2.5D gray charm based on the input image.
+
+The model must have a clearly raised, low-relief appearance — similar to a thick, softly domed coin or medallion — but with stronger 3D volume and sculptural contouring than a typical flat bas-relief. Use a smooth matte finish and highly simplified, elegant features. Preserve the subject's recognizable form, proportions, and key identifying elements in a clean, refined, timeless style.
+
+Important Style Instructions:
+Focus entirely on the main subject (people, animals, objects, food, plants, fantasy creatures, etc.).
+No background elements, bases, scenery, or frames — only the subject.
+
+For people and animals:
+• Simplify faces into soft, minimal features (small eyes, subtle nose/mouth, no exaggerated expressions).
+• Avoid cartoon exaggeration — aim for natural, serene, or affectionate emotion.
+
+For objects/food/plants/buildings:
+• Keep forms bold, simple, iconic, and easily recognizable.
+
+Strongly emphasize smooth, rounded volumes and bold silhouettes:
+• Use deeper grooves, softly padded surfaces, and clean flowing curves to enhance the 3D feel.
+
+Simplify all textures:
+• No fine patterns, tiny folds, or mechanical details — only large, clear shapes.
+
+Prioritize maximum readability:
+• Design must stay clean and recognizable when scaled to about 1 inch in size.
+
+Medallion Rules:
+If the subject has thin, fragile, or widely spread parts (e.g., arms, tails, wings), contain the design inside a soft organic circular or oval medallion for strength.
+If the subject is naturally compact and sturdy, leave it free-floating and self-contained without a background frame.
+
+Manufacturing Constraints:
+No full 3D bodies:
+• All parts must rise smoothly from a single, slightly curved back surface (true 2.5D relief).
+No text, writing, or background scenery.
+No rings, loops, or holes for attachments — design should be clean; attachment rings added manually later.
+All outer edges must be softly rounded and thick enough to ensure durability.
+Model must be watertight, sturdy, and printable at small scale (~1 inch) for resin or FDM 3D printing.
+
+Render Instructions:
+Render the charm against a neutral background.
+Use soft, diffuse lighting to highlight the form, curvature, and dimensionality.
+Prioritize showcasing the depth and sculptural quality of the 2.5D design.`;
+
+// Helper function to save uploaded file
+async function saveUploadedFile(formData: FormData): Promise<string> {
+  const file = formData.get("file") as File;
+  if (!file) {
+    throw new Error("No file provided");
+  }
+
+  // Validate file type
+  const fileType = file.type;
+  if (!fileType.startsWith("image/")) {
+    throw new Error("Only image files are supported");
+  }
+
+  // Validate file size (10MB limit)
+  const maxSize = 10 * 1024 * 1024; // 10MB
+  if (file.size > maxSize) {
+    throw new Error("File size exceeds the 10MB limit");
+  }
+
+  // Create uploads directory if it doesn't exist
+  const uploadsDir = join(process.cwd(), "public", "uploads");
+  if (!existsSync(uploadsDir)) {
+    await mkdir(uploadsDir, { recursive: true });
+  }
+
+  // Generate a unique filename
+  const timestamp = Date.now();
+  const fileName = `upload-${timestamp}${getFileExtension(file.name)}`;
+  const filePath = join(uploadsDir, fileName);
+
+  // Convert file to buffer and save
+  const buffer = Buffer.from(await file.arrayBuffer());
+  await writeFile(filePath, buffer);
+
+  // Return the public path to the file
+  return `/uploads/${fileName}`;
+}
+
+// Helper function to get file extension
+function getFileExtension(filename: string): string {
+  const ext = filename.split(".").pop();
+  return ext ? `.${ext}` : "";
+}
+
+// Helper function to enhance image directly with GPT-image-1
+async function enhanceImageWithGPTImage(imageUrl: string, userPrompt: string): Promise<string> {
+  const baseUrl = process.env.NODE_ENV === "development" 
+    ? `http://localhost:${process.env.PORT || 3000}` 
+    : process.env.NEXT_PUBLIC_APP_URL || "";
   
-  while (retries < maxRetries) {
-    try {
-      // Add a delay that increases with each retry
-      if (retries > 0) {
-        const delay = Math.pow(2, retries) * 1000;
-        console.log(`📋 [enhance-image] Retry ${retries}/${maxRetries} - waiting ${delay}ms before retry`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-      
-      return await fn();
-    } catch (error: any) {
-      retries++;
-      
-      // Only retry on rate limit errors
-      if (error.status === 429 && retries < maxRetries) {
-        console.log(`📋 [enhance-image] Rate limit exceeded, will retry in ${Math.pow(2, retries) * 1000}ms`);
-        continue;
-      }
-      
-      // For other errors or if we've exhausted retries, throw the error
-      throw error;
+  const fullImageUrl = imageUrl.startsWith("http") 
+    ? imageUrl 
+    : `${baseUrl}${imageUrl}`;
+
+  // Use the specific 2.5D charm prompt
+  const finalPrompt = userPrompt.trim() ? `${CHARM_PROMPT}\n\nAdditional instructions: ${userPrompt}` : CHARM_PROMPT;
+  
+  console.log("Final prompt for GPT-image-1:", finalPrompt.substring(0, 100) + "...");
+
+  try {
+    // Fetch the image as a blob
+    console.log("Fetching image from:", fullImageUrl);
+    const imageResponse = await fetch(fullImageUrl);
+    
+    if (!imageResponse.ok) {
+      throw new Error(`Failed to fetch image: ${imageResponse.status} ${imageResponse.statusText}`);
     }
+    
+    const imageBlob = await imageResponse.blob();
+    console.log("Image blob size:", Math.round(imageBlob.size / 1024), "KB");
+    
+    const imageBase64 = await blobToBase64(imageBlob);
+    console.log("Base64 image length:", imageBase64.length);
+
+    console.log("Preparing GPT-image-1 API request...");
+    
+    // Construct request payload for image variations endpoint
+    const requestPayload = {
+      model: 'gpt-image-1',
+      n: 1,
+      size: '1024x1024',
+      image: imageBase64,
+    };
+    
+    // Log the prompt separately since we're not sending it in the payload
+    console.log(`📝 Prompt (not sent to API): ${finalPrompt.substring(0, 50)}...`);
+    console.log(`🚀 Sending GPT-image-1 API request with payload keys: ${Object.keys(requestPayload).join(', ')}`);
+    
+    // Generate image with GPT-image-1 through direct API call
+    console.log("Sending request to OpenAI GPT-image-1 API...");
+    const response = await fetch('https://api.openai.com/v1/images/variations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'OpenAI-Beta': 'gpt-image-1'
+      },
+      body: JSON.stringify(requestPayload)
+    });
+
+    console.log("OpenAI API response status:", response.status);
+    
+    const responseText = await response.text();
+    console.log("Response text (first 200 chars):", responseText.substring(0, 200) + "...");
+    
+    if (!response.ok) {
+      console.error("GPT-image-1 API error:", responseText);
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = JSON.parse(responseText);
+    console.log("Parsed response data:", JSON.stringify(data, null, 2).substring(0, 200) + "...");
+    
+    if (!data.data || !data.data[0] || !data.data[0].url) {
+      console.error("No image URL in response:", data);
+      throw new Error("OpenAI API returned no image URL");
+    }
+    
+    // Return enhanced image URL
+    console.log("Image successfully generated with GPT-image-1, URL:", data.data[0].url.substring(0, 50) + "...");
+    return data.data[0].url;
+  } catch (error) {
+    console.error("Error enhancing image with GPT-image-1:", error);
+    throw new Error(`Image enhancement failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-export async function POST(request: Request) {
-  console.log("📋 [enhance-image] API route started");
-  const startTime = Date.now();
+// Helper function to convert blob to base64
+async function blobToBase64(blob: Blob): Promise<string> {
+  const arrayBuffer = await blob.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const base64Data = buffer.toString('base64');
   
+  // OpenAI API might need different formats for different endpoints
+  // Let's try just the raw base64 string without the data URL prefix
+  return base64Data;
+}
+
+// Helper function to send enhanced image to Tripo API for 3D generation
+async function sendToTripoAPI(imageUrl: string, jewelryType: string = "charm"): Promise<string | null> {
+  if (!TRIPO_API_KEY) {
+    console.warn("Tripo API key not configured, skipping 3D generation");
+    return null;
+  }
+
   try {
-    console.log("📋 [enhance-image] Parsing form data...");
-    const formData = await request.formData();
+    console.log("Preparing request to Tripo API with image URL:", imageUrl.substring(0, 50) + "...");
     
-    // Extract data from request
-    const file = formData.get('file') as File | null;
-    const prompt = formData.get('prompt') as string;
+    // For 2.5D charms, we want to use the image-to-model endpoint
+    // Direct payload for image URL
+    const payload = {
+      image_url: imageUrl,
+      model_type: "charm",
+      options: {
+        background: "transparent",
+        quality: "high",
+      }
+    };
 
-    // Use environment variable for API key
-    const apiKey = process.env.OPENAI_API_KEY;
-    const claudeApiKey = process.env.CLAUDE_API_KEY || '';
+    console.log("Tripo API payload:", JSON.stringify(payload, null, 2));
 
-    // Log for debugging (don't log API key)
-    console.log("📋 [enhance-image] API Key configured:", !!apiKey);
-    console.log("📋 [enhance-image] Claude API Key configured:", !!claudeApiKey);
-    console.log("📋 [enhance-image] File present:", !!file);
-    if (file) {
-      console.log("📋 [enhance-image] File type:", file.type);
-      console.log("📋 [enhance-image] File size:", file.size, "bytes");
+    // Send to Tripo API
+    console.log("Sending to Tripo API...");
+    const response = await fetch("https://api.tripo3d.ai/v1/generate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${TRIPO_API_KEY}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    console.log("Tripo API response status:", response.status);
+    const responseText = await response.text();
+    console.log("Tripo API response:", responseText.substring(0, 200) + "...");
+
+    if (!response.ok) {
+      console.error("Tripo API error:", responseText);
+      return null;
     }
 
-    // Validate inputs
-    if (!file) {
-      console.log("❌ [enhance-image] Error: Missing file");
+    const data = JSON.parse(responseText);
+    console.log("Successfully sent to Tripo API, task ID:", data.task_id);
+    return data.task_id || null;
+  } catch (error) {
+    console.error("Error sending to Tripo API:", error);
+    return null;
+  }
+}
+
+export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  
+  console.log("==== STARTING ENHANCE-IMAGE-WITH-GPT ROUTE ====");
+  console.log("Time:", new Date().toISOString());
+  
+  try {
+    // Check API keys
+    // NOTE: Make sure this key is correctly set in your .env file
+    const openaiApiKey = process.env.OPENAI_API_KEY;
+    
+    if (!openaiApiKey) {
+      console.error("❌ OpenAI API key is missing");
       return NextResponse.json(
-        { error: "Missing file" },
+        { error: "OpenAI API key is not configured. Please add it to your environment variables." },
+        { status: 500 }
+      );
+    }
+    
+    // Parse the incoming form data
+    const formData = await request.formData();
+    
+    // Explicitly log what we received
+    console.log("📥 Request form data keys:", Array.from(formData.keys()));
+    
+    // Get the file and prompt
+    const file = formData.get("file") as File | null;
+    const userPrompt = formData.get("prompt") as string || "";
+    
+    console.log(`📥 Received prompt: "${userPrompt}"`);
+    console.log(`📥 Received file: ${file ? `${file.name} (${file.type}, ${Math.round(file.size / 1024)}KB)` : "MISSING"}`);
+    
+    if (!file) {
+      console.error("❌ No file provided in request");
+      return NextResponse.json(
+        { error: "No file provided" },
         { status: 400 }
       );
     }
-
-    // If OpenAI API key is not provided or invalid, use Claude for text description
-    if (!apiKey || apiKey === "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx") {
-      console.log("⚠️ [enhance-image] Using Claude for text description due to missing OpenAI API key");
-      
-      // Convert the file to buffer for Claude
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      
-      return await fallbackToClaudeVision(claudeApiKey, buffer, file.type, prompt || "Describe this image as a minimalist charm.");
-    }
-
-    // Initialize the OpenAI client
-    console.log("📋 [enhance-image] Initializing OpenAI client...");
-    const openai = new OpenAI({
-      apiKey: apiKey,
-    });
-
-    // Convert the file to buffer
-    console.log("📋 [enhance-image] Converting file to buffer...");
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    console.log("📋 [enhance-image] Starting image generation with gpt-image-1 model");
     
-    // Create an enhanced version of the charm prompt
-    const promptLength = prompt?.length || 0;
-    console.log(`📋 [enhance-image] Using prompt of length ${promptLength} characters`);
-    const enhancedPrompt = prompt || 
-      "Create a 2.5D gray charm based on the input image. The charm should have a clearly raised, low-relief appearance with smooth matte finish and simplified elegant features. Preserve the subject's recognizable form in a clean, refined style. Focus on the main subject only - no background elements. Use deeper grooves, softly padded surfaces, and clean flowing curves for a strong 3D feel. Simplify all textures and prioritize maximum readability. Show the design on a white background.";
-
-    try {
-      console.log("📋 [enhance-image] Creating Blob and File object from buffer...");
-      const imageBlob = new Blob([buffer], { type: file.type });
-      const imageFile = new File([imageBlob], file.name, { type: file.type });
-      
-      console.log("📋 [enhance-image] Calling OpenAI GPT-Image-1 API with rate limiting protection...");
-      console.log("📋 [enhance-image] API call started at:", new Date().toISOString());
-      
-      const result = await callWithRetry(async () => {
-        return await openai.images.generate({
-          model: "gpt-image-1",
-          prompt: enhancedPrompt,
-          n: 1,
-          size: "1024x1024",
-          quality: "high"
-        });
-      });
-      
-      const apiCallDuration = (Date.now() - startTime) / 1000;
-      console.log(`📋 [enhance-image] OpenAI API call completed in ${apiCallDuration.toFixed(2)} seconds`);
-      
-      // Check if there's a valid image URL in the response
-      if (!result.data || !result.data[0] || !result.data[0].url) {
-        console.error("❌ [enhance-image] Invalid response format from OpenAI");
-        console.log("❌ [enhance-image] Response data structure:", JSON.stringify(result, null, 2).substring(0, 200) + "...");
-        
-        // Fallback to Claude Vision
-        console.log("📋 [enhance-image] Falling back to Claude Vision for text description");
-        return await fallbackToClaudeVision(claudeApiKey, buffer, file.type, enhancedPrompt);
-      }
-      
-      // Get the image URL from the response
-      const imageUrl = result.data[0].url;
-      console.log(`📋 [enhance-image] Received image URL: ${imageUrl.substring(0, 50)}...`);
-      
-      const totalDuration = (Date.now() - startTime) / 1000;
-      console.log(`✅ [enhance-image] Successfully generated enhanced image in ${totalDuration.toFixed(2)} seconds`);
-      return NextResponse.json({
-        enhancedImageUrl: imageUrl,
-        processingTime: totalDuration
-      });
-    } catch (error: any) {
-      console.error("❌ [enhance-image] Error calling OpenAI:", error);
-      
-      // Handle rate limiting specifically
-      if (error.status === 429) {
-        console.error("❌ [enhance-image] Rate limit exceeded even after retries");
-        
-        // Fallback to Claude Vision
-        console.log("📋 [enhance-image] Falling back to Claude Vision for text description due to rate limit");
-        return await fallbackToClaudeVision(claudeApiKey, buffer, file.type, enhancedPrompt);
-      }
-      
-      // For any other error, fallback to Claude Vision
-      console.log("⚠️ [enhance-image] Falling back to Claude Vision due to API error");
-      return await fallbackToClaudeVision(claudeApiKey, buffer, file.type, enhancedPrompt);
+    // Save the uploaded file and get its public path
+    const uploadedImagePath = await saveUploadedFile(formData);
+    console.log(`📁 Image saved at: ${uploadedImagePath}`);
+    
+    // Create the full URL for the image
+    const baseUrl = process.env.NODE_ENV === "development" 
+      ? `http://localhost:${process.env.PORT || 3000}` 
+      : process.env.NEXT_PUBLIC_APP_URL || "";
+    
+    const fullImageUrl = `${baseUrl}${uploadedImagePath}`;
+    console.log(`🔗 Full image URL: ${fullImageUrl}`);
+    
+    // Prepare the GPT-image-1 prompt
+    const finalPrompt = userPrompt.trim() ? `${CHARM_PROMPT}\n\nAdditional instructions: ${userPrompt}` : CHARM_PROMPT;
+    
+    console.log(`📝 Using GPT-image-1 prompt (first 100 chars): ${finalPrompt.substring(0, 100)}...`);
+    console.log(`📝 Prompt length: ${finalPrompt.length} characters`);
+    
+    // Get the full path to the uploaded file so we can read it
+    const fullFilePath = join(process.cwd(), "public", uploadedImagePath);
+    console.log(`📂 Full file path: ${fullFilePath}`);
+    
+    // Create a FormData for the multipart upload to OpenAI
+    const openAIFormData = new FormData();
+    openAIFormData.append("model", "gpt-image-1");
+    openAIFormData.append("prompt", finalPrompt);
+    
+    // Re-get the file from formData to avoid having to reread it from disk
+    openAIFormData.append("image", file);
+    
+    openAIFormData.append("n", "1");
+    openAIFormData.append("size", "1024x1024");
+    // response_format is not supported on the /images/edits endpoint yet
+    
+    console.log(`🚀 Sending GPT-image-1 API request with image and prompt`);
+    console.log(`📝 Using multipart form with fields: model, prompt, image, n, size`);
+    
+    // Make the API call to OpenAI
+    console.log(`🚀 Calling OpenAI API at: https://api.openai.com/v1/images/edits`);
+    
+    // Validate API key (don't log full key)
+    if (!openaiApiKey.startsWith('sk-')) {
+      console.error(`❌ API key does not appear to be in correct format (should start with 'sk-')`);
+    } else {
+      console.log(`🔑 Using API key (first 5 chars): ${openaiApiKey.substring(0, 5)}...`);
     }
-  } catch (error: any) {
-    console.error("❌ [enhance-image] Error processing request:", error);
-    const totalDuration = (Date.now() - startTime) / 1000;
-    console.error(`❌ [enhance-image] Request failed after ${totalDuration.toFixed(2)} seconds`);
+    
+    const apiStartTime = Date.now();
+    const response = await fetch('https://api.openai.com/v1/images/edits', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+      },
+      body: openAIFormData
+    });
+    
+    const apiDuration = (Date.now() - apiStartTime) / 1000;
+    console.log(`📊 API response received in ${apiDuration.toFixed(2)} seconds`);
+    console.log(`📊 Response status: ${response.status} ${response.statusText}`);
+    
+    const responseText = await response.text();
+    let data;
+    
+    try {
+      data = JSON.parse(responseText);
+      console.log(`📊 Response parsed as JSON:`, JSON.stringify(data, null, 2).substring(0, 300) + "...");
+      
+      if (data.error) {
+        console.error(`❌ GPT-image-1 API error:`, data.error);
+        throw new Error(`OpenAI GPT-image-1 API error: ${data.error.message || 'Unknown API error'}`);
+      }
+    } catch (error) {
+      console.error(`❌ Error parsing GPT-image-1 response:`, error);
+      console.log(`📊 Response text (first 200 chars): ${responseText.substring(0, 200)}...`);
+      throw new Error(`Failed to parse GPT-image-1 API response: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    
+    if (!response.ok) {
+      console.error(`❌ GPT-image-1 API error: ${responseText}`);
+      throw new Error(`OpenAI GPT-image-1 API error: ${response.status} ${response.statusText}`);
+    }
+    
+    // Get the enhanced image URL
+    if (!data.data || !data.data[0]) {
+      console.error(`❌ No image data in GPT-image-1 response:`, data);
+      throw new Error("OpenAI GPT-image-1 API returned no image data");
+    }
+    
+    let enhancedImageUrl;
+    
+    // Handle both URL and base64 response formats
+    if (data.data[0].url) {
+      // For /images/generations endpoint which can return URLs
+      enhancedImageUrl = data.data[0].url;
+      console.log(`✅ Image successfully generated with GPT-image-1 (URL format)`);
+    } else if (data.data[0].b64_json) {
+      // For /images/edits endpoint which returns base64
+      console.log(`✅ Image successfully generated with GPT-image-1 (base64 format)`);
+      
+      // Save the base64 data to a file in the public/uploads directory
+      const timestamp = Date.now();
+      const outputFileName = `enhanced-${timestamp}.png`;
+      const outputDir = join(process.cwd(), "public", "uploads");
+      const outputPath = join(outputDir, outputFileName);
+      
+      console.log(`📂 Saving base64 image to: ${outputPath}`);
+      
+      // Convert base64 to buffer and write to file
+      const imageBuffer = Buffer.from(data.data[0].b64_json, "base64");
+      await writeFile(outputPath, imageBuffer);
+      
+      // Construct a URL that points to the saved image
+      enhancedImageUrl = `/uploads/${outputFileName}`;
+      console.log(`🔗 Created local URL for the image: ${enhancedImageUrl}`);
+    } else {
+      console.error(`❌ No image URL or base64 data in response:`, data.data[0]);
+      throw new Error("OpenAI GPT-image-1 API returned image in unknown format");
+    }
+    
+    console.log(`🔗 Enhanced image path: ${enhancedImageUrl}`);
+    
+    // Send to Tripo API if enabled
+    let tripoTaskId: string | null = null;
+    if (TRIPO_API_KEY) {
+      console.log(`🚀 Sending to Tripo API for 3D generation...`);
+      tripoTaskId = await sendToTripoAPI(enhancedImageUrl, "charm");
+      console.log(`✅ Tripo task ID: ${tripoTaskId || "FAILED"}`);
+    } else {
+      console.log(`ℹ️ Skipping Tripo API - no API key configured`);
+    }
+    
+    // Calculate processing time
+    const processingTime = (Date.now() - startTime) / 1000;
+    console.log(`⏱️ Total processing time: ${processingTime.toFixed(2)} seconds`);
+    
+    // Return the response with the enhanced image URL
+    return NextResponse.json({
+      success: true,
+      enhancedImageUrl,
+      tripoTaskId,
+      jewelryType: "charm",
+      processingTime
+    });
+  } catch (error) {
+    const processingTime = (Date.now() - startTime) / 1000;
+    console.error(`❌ Error after ${processingTime.toFixed(2)} seconds:`, error);
+    
+    // Return detailed error for better debugging
     return NextResponse.json(
-      { 
-        useTextOnly: true,
-        textDescription: "Error processing the charm: " + (error.message || String(error)),
-        error: "Failed to process request: " + (error.message || String(error))
+      {
+        error: error instanceof Error ? error.message : "An unknown error occurred",
+        processingTime
       },
       { status: 500 }
     );
+  } finally {
+    console.log("==== COMPLETED ENHANCE-IMAGE-WITH-GPT ROUTE ====");
   }
-}
-
-// Function to fallback to Claude Vision for text description
-async function fallbackToClaudeVision(claudeApiKey: string, imageBuffer: Buffer, mimeType: string, originalPrompt: string) {
-  try {
-    console.log("📋 [enhance-image] Attempting to generate text description with Claude Vision");
-    
-    // Convert buffer to base64 for the API call
-    const base64Image = imageBuffer.toString('base64');
-    
-    // STEP 1: Get a clear description of what's in the image
-    console.log("📋 [enhance-image] Step 1: Getting accurate image description from Claude");
-    const identifyPrompt = `Describe exactly what's in this image in detail. 
-Be specific about the main subject(s).
-For people, specify gender (man, woman, boy, girl, etc.) and approximate age (child, teen, adult, elderly).
-For people, describe their appearance (hair color/style, clothing, facial features).
-Examples: "two adult women with glasses in a kitchen", "adult man with beard holding coffee mug", "teenage girl with blonde hair", "elderly man with glasses"`;
-    
-    const identifyRequestBody = {
-      model: "claude-3-7-sonnet-20250219",
-      max_tokens: 150, // Allow for more detailed identification
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: mimeType,
-                data: base64Image
-              }
-            },
-            {
-              type: "text",
-              text: identifyPrompt
-            }
-          ]
-        }
-      ]
-    };
-    
-    // Call Claude API for identification
-    console.log("📋 [enhance-image] Calling Claude API for identification...");
-    const identifyResponse = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": claudeApiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json"
-      },
-      body: JSON.stringify(identifyRequestBody)
-    });
-    
-    if (!identifyResponse.ok) {
-      throw new Error(`Claude API error: ${identifyResponse.status} ${identifyResponse.statusText}`);
-    }
-    
-    const identifyResult = await identifyResponse.json();
-    
-    if (!identifyResult.content || !identifyResult.content[0] || !identifyResult.content[0].text) {
-      throw new Error("Invalid response format from Claude API");
-    }
-    
-    // Get the raw identification from Claude
-    const identification = identifyResult.content[0].text.trim()
-      .replace(/["']/g, '')
-      .replace(/^(here's|this is|i would describe this as|i can see|the image shows)/gi, '')
-      .trim();
-    
-    console.log(`📋 [enhance-image] Claude identified: "${identification}"`);
-    
-    // STEP 2: Use a second AI call to create a clear medallion description
-    console.log("📋 [enhance-image] Step 2: Creating flat circle description using identification");
-    
-    // Use Claude API again to create a medallion description
-    const formatPrompt = `Create a focused flat circle design description based on: "${identification}"
-
-Format as "Flat circle with [specific description of main subjects]"
-
-Guidelines:
-- Remember this will be engraved on a FLAT CIRCULAR PENDANT
-- For people: Make them cartoonish/simplified and include gender, age range (child, teen, adult, elderly), and distinctive features
-- For animals: Include species, breed if clear, and distinctive pose or feature
-- For objects: Include key distinguishing characteristics that define it
-- Focus ONLY on the main subjects, not background elements
-- Include 1-3 specific details that make the subject recognizable and unique
-- Keep description clear and concise while capturing essential visual elements
-- Use descriptive, specific terms rather than generic ones
-
-Examples of good descriptions:
-- "Flat circle with cartoon elderly bearded man in profile"
-- "Flat circle with cartoon woman with ponytail reading"
-- "Flat circle with spotted dalmatian puppy sitting"
-- "Flat circle with mountain peak reflecting in lake"
-- "Flat circle with pair of ballet shoes with ribbons"`;
-    
-    const formatRequestBody = {
-      model: "claude-3-7-sonnet-20250219",
-      max_tokens: 100,
-      messages: [
-        {
-          role: "user",
-          content: formatPrompt
-        }
-      ]
-    };
-    
-    // Call Claude API for formatting
-    console.log("📋 [enhance-image] Calling Claude API for formatting...");
-    const formatResponse = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": claudeApiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json"
-      },
-      body: JSON.stringify(formatRequestBody)
-    });
-    
-    if (!formatResponse.ok) {
-      throw new Error(`Claude API error: ${formatResponse.status} ${formatResponse.statusText}`);
-    }
-    
-    const formatResult = await formatResponse.json();
-    
-    if (!formatResult.content || !formatResult.content[0] || !formatResult.content[0].text) {
-      throw new Error("Invalid response format from Claude API");
-    }
-    
-    // Get the final medallion description
-    let medallionDescription = formatResult.content[0].text.trim()
-      .replace(/["']/g, '')
-      .replace(/^(here's|this is|i'd create:|i would create:|this would be)/gi, '')
-      .trim();
-    
-    // Ensure it starts with "Flat circle with"
-    if (!medallionDescription.toLowerCase().startsWith("flat circle with")) {
-      console.log(`📋 [enhance-image] Adding prefix to description`);
-      medallionDescription = `Flat circle with ${medallionDescription}`;
-    }
-    
-    console.log(`📋 [enhance-image] Final description: "${medallionDescription}"`);
-    console.log(`📋 [enhance-image] Description length: ${medallionDescription.length} characters`);
-    
-    // Return text-only mode response with the medallion description
-    return NextResponse.json({
-      useTextOnly: true,
-      textDescription: medallionDescription
-    });
-  } catch (error: any) {
-    console.error("❌ [enhance-image] Error generating text description with Claude:", error);
-    
-    // Fallback to generic text if Claude API fails
-    return NextResponse.json({
-      useTextOnly: true,
-      textDescription: "Flat circle with simple design",
-      error: "Failed to generate text description: " + (error.message || String(error))
-    });
-  }
-}
-
-// Simplified fallback function to get medallion type
-function getMedallionFallback(identification: string): string {
-  // Convert to lowercase for easier matching
-  const text = identification.toLowerCase();
-  
-  // Check for people-related terms
-  if (/person|people|face|profile|selfie|woman|man|girl|boy|human|glasses|portrait/i.test(text)) {
-    return "Flat circle with cartoon profile";
-  }
-  
-  // Check for common subjects
-  if (/heart|love/i.test(text)) return "Flat circle with heart";
-  if (/flower|plant|petal|rose/i.test(text)) return "Flat circle with flower";
-  if (/animal|cat|dog|bird|pet/i.test(text)) return "Flat circle with animal";
-  if (/symbol|sign|logo|star/i.test(text)) return "Flat circle with symbol";
-  if (/shape|pattern|geometric/i.test(text)) return "Flat circle with shape";
-  if (/food|fruit|meal|drink/i.test(text)) return "Flat circle with food";
-  if (/nature|landscape|sky/i.test(text)) return "Flat circle with nature";
-  if (/building|house|structure/i.test(text)) return "Flat circle with building";
-  
-  // Default fallback
-  return "Flat circle with design";
 } 

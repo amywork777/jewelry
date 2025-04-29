@@ -474,26 +474,87 @@ export function ModelGenerator() {
     
     try {
       setStatus("generating")
-      setProgress(0)
+      setProgress(10)
       setIsGenerating(true)
       // Reset STL state when generating a new model
       setStlBlob(null)
       setStlUrl(null)
 
-      // First upload the image
+      // First enhance the image with GPT-image-1 to get a 2.5D charm
       const formData = new FormData()
       formData.append("file", selectedFile)
+      formData.append("prompt", "Create a 2.5D gray charm")
 
-      const uploadResponse = await fetch("/api/upload-image", {
+      // Log that we're using the new enhanced API
+      console.log("Using GPT-image-1 API for image processing...")
+      toast({
+        title: "Processing Image",
+        description: "Creating a 2.5D charm with GPT-image-1...",
+      })
+
+      const enhanceResponse = await fetch("/api/enhance-image-with-gpt", {
         method: "POST",
         body: formData,
       })
 
+      if (!enhanceResponse.ok) {
+        const errorData = await enhanceResponse.json()
+        console.error("Error from enhance-image-with-gpt:", errorData)
+        throw new Error("Failed to enhance image: " + (errorData.error || "Unknown error"))
+      }
+
+      const enhanceData = await enhanceResponse.json()
+      console.log("Enhanced image data:", enhanceData)
+
+      // If Tripo integration already happened in the enhancement step
+      if (enhanceData.tripoTaskId) {
+        setTaskId(enhanceData.tripoTaskId)
+        setProgress(50)
+        toast({
+          title: "3D Model Generation Started",
+          description: "Image was enhanced and a 3D model is being created...",
+        })
+        // Start polling for task status
+        pollTaskStatus(enhanceData.tripoTaskId)
+        return
+      }
+
+      // Otherwise, upload the enhanced image to Tripo
+      if (!enhanceData.enhancedImageUrl) {
+        throw new Error("No enhanced image URL received")
+      }
+
+      // Now upload the enhanced image to Tripo
+      setProgress(30)
+      toast({
+        title: "Image Enhanced",
+        description: "Now creating 3D model from enhanced image...",
+      })
+
+      // Download the enhanced image and then upload to Tripo
+      const imageResponse = await fetch(enhanceData.enhancedImageUrl)
+      if (!imageResponse.ok) {
+        throw new Error("Failed to download enhanced image")
+      }
+
+      const imageBlob = await imageResponse.blob()
+      const imageFile = new File([imageBlob], "enhanced-charm.png", { type: "image/png" })
+
+      // Upload to Tripo
+      const tripoFormData = new FormData()
+      tripoFormData.append("file", imageFile)
+
+      const uploadResponse = await fetch("/api/upload-image", {
+        method: "POST",
+        body: tripoFormData,
+      })
+
       if (!uploadResponse.ok) {
-        throw new Error("Failed to upload image")
+        throw new Error("Failed to upload enhanced image to Tripo")
       }
 
       const uploadData = await uploadResponse.json()
+      setProgress(40)
 
       // Then start the image-to-model generation
       setStatus("generating")
@@ -514,6 +575,7 @@ export function ModelGenerator() {
 
       const data = await response.json()
       setTaskId(data.taskId)
+      setProgress(50)
 
       // Start polling for task status
       pollTaskStatus(data.taskId)
@@ -523,7 +585,7 @@ export function ModelGenerator() {
       setIsGenerating(false)
       toast({
         title: "Error",
-        description: "Failed to generate model. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to generate model. Please try again.",
         variant: "destructive",
       })
     }
@@ -1334,50 +1396,76 @@ export function ModelGenerator() {
                   Tip: Describe one object at a time for best results.
                 </p>
               </TabsContent>
-              <TabsContent value="image" className="space-y-4">
-                <div
-                  {...getRootProps()}
-                  className={`border-2 border-dashed rounded-lg p-3 sm:p-4 text-center cursor-pointer transition-colors ${
-                    isDragActive ? "border-primary bg-primary/10" : "border-gray-300 hover:bg-gray-50"
-                  } ${status === "uploading" || status === "generating" ? "opacity-50 cursor-not-allowed" : ""}`}
-                >
-                  <input {...getInputProps()} />
-                  {previewUrl ? (
-                    <div className="flex flex-col items-center gap-2">
-                      <img
-                        src={previewUrl}
-                        alt="Preview"
-                        className="max-h-[150px] sm:max-h-[200px] max-w-full object-contain rounded-lg"
-                      />
-                      <p className="text-xs sm:text-sm text-gray-500">
+              <TabsContent value="image" className="py-4 space-y-4">
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm text-center mb-4">
+                      Upload a photo to create a beautiful 2.5D charm using GPT-image-1. 
+                      The process will first create a raised-relief 2.5D charm design, then convert it to 3D.
+                    </p>
+                  </div>
+                  <div 
+                    {...getRootProps()} 
+                    className={`border-2 border-dashed rounded-md p-6 flex flex-col items-center cursor-pointer transition ${
+                      isDragActive ? "border-primary bg-primary/10" : "border-gray-300 hover:bg-gray-50"
+                    }  ${status !== 'idle' ? 'opacity-50 pointer-events-none' : ''}`}
+                  >
+                    <input {...getInputProps()} />
+                    {previewUrl ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <img
+                          src={previewUrl}
+                          alt="Preview"
+                          className="max-h-36 max-w-full object-contain rounded-md"
+                        />
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
                           onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedFile(null);
-                            setPreviewUrl(null);
+                            e.stopPropagation()
+                            setSelectedFile(null)
+                            setPreviewUrl(null)
                           }}
-                          className="text-xs sm:text-sm h-7 sm:h-9 px-2 sm:px-3"
+                          className="mt-2"
+                          disabled={status !== 'idle'}
                         >
-                          <Repeat className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" /> Remove image
+                          <Repeat className="h-4 w-4 mr-2" /> Change
                         </Button>
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="py-4 sm:py-8">
-                      <div className="flex justify-center">
-                        <Camera className="h-8 w-8 sm:h-10 sm:w-10 text-gray-400" />
                       </div>
-                      <p className="mt-2 text-xs sm:text-sm font-medium">
-                        Tap to upload or drag an image
-                      </p>
-                      <p className="mt-1 text-xs text-gray-500">
-                        JPG, PNG up to 10MB
-                      </p>
-                    </div>
-                  )}
+                    ) : (
+                      <div className="flex flex-col items-center gap-1">
+                        <Upload className="h-12 w-12 text-gray-400 mb-1" />
+                        <p className="text-center text-gray-600 font-medium text-sm">
+                          Drag & drop an image or click to upload
+                        </p>
+                        <p className="text-xs text-gray-500 text-center">
+                          Supports JPEG or PNG (Max 10MB)
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex justify-center mt-4">
+                  <Button 
+                    onClick={handleImageSubmit} 
+                    disabled={!selectedFile || status !== 'idle'} 
+                    className="w-full max-w-xs"
+                  >
+                    {status === 'idle' ? (
+                      <>
+                        <Wand2 className="h-4 w-4 mr-2" /> Create 2.5D Charm
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> {
+                          status === 'uploading' ? 'Uploading...' :
+                          status === 'generating' ? 'Creating Charm...' :
+                          'Processing...'
+                        }
+                      </>
+                    )}
+                  </Button>
                 </div>
               </TabsContent>
             </div>
@@ -1480,40 +1568,57 @@ export function ModelGenerator() {
                   </Button>
                 </div>
               )}
-              
-              {/* Generate button */}
-              {(status !== "completed" || !modelUrl) && (
-                <Button
-                  className="w-full flex items-center justify-center"
-                  size="sm"
-                  onClick={
-                    inputType === "text" 
-                      ? handleTextSubmit 
-                      : handleImageSubmit
-                  }
-                  disabled={
-                    isGenerating || 
-                    (inputType === "text" && !textPrompt.trim()) ||
-                    (inputType === "image" && !selectedFile)
-                  }
-                >
-                  {isGenerating ? (
-                    <>
-                      <span className="text-xs sm:text-sm mr-2">
-                        Generating
-                      </span>
-                      <div className="h-3 w-3 sm:h-4 sm:w-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                    </>
-                  ) : (
-                    <>
-                      <Wand2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                      <span className="text-xs sm:text-sm">Generate Charm</span>
-                    </>
-                  )}
-                </Button>
-              )}
             </div>
           </Tabs>
+
+          {inputType === "image" && (
+            <>
+              {status === "completed" && modelUrl && (
+                <div className="flex flex-col items-center gap-2 mt-4">
+                  <Button 
+                    variant="outline" 
+                    onClick={handleDownload} 
+                    className="w-full max-w-xs"
+                    disabled={isDownloading}
+                  >
+                    {isDownloading ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Downloading...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4 mr-2" /> Download STL File
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+          
+          {inputType === "text" && (
+            <div className="mt-4">
+              <Button 
+                onClick={handleTextSubmit} 
+                disabled={!textPrompt || status !== "idle"} 
+                className="w-full"
+              >
+                {status === "idle" ? (
+                  <>
+                    <Wand2 className="h-4 w-4 mr-2" /> Generate from Text
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> {
+                      status === "uploading" ? "Uploading..." :
+                      status === "generating" ? "Generating..." :
+                      "Processing..."
+                    }
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
