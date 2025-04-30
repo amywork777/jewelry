@@ -227,12 +227,32 @@ async function sendToTripoAPI(imageUrl: string, jewelryType: string = "charm"): 
   }
 
   try {
-    console.log("Preparing request to Tripo API with image URL:", imageUrl.substring(0, 50) + "...");
+    console.log("Preparing request to Tripo API with image URL:", imageUrl);
+    
+    let tripoImageUrl = imageUrl;
+    
+    // If this is our API endpoint, we need to create a publicly accessible URL
+    // for the Tripo API to access
+    if (imageUrl.startsWith('/api/enhanced-images/')) {
+      // For demo purpose, we'll need a public URL for Tripo
+      // In production, you should:
+      // 1. Upload to Cloud Storage (R2, S3, etc.) and get a public URL
+      // 2. OR if your app has a public domain, use that domain + the API path
+      
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+      if (appUrl) {
+        tripoImageUrl = `${appUrl}${imageUrl}`;
+        console.log("Using public URL for Tripo API:", tripoImageUrl);
+      } else {
+        console.error("Cannot create public URL for Tripo API without NEXT_PUBLIC_APP_URL");
+        return null;
+      }
+    }
     
     // For 2.5D charms, we want to use the image-to-model endpoint
     // Direct payload for image URL
     const payload = {
-      image_url: imageUrl,
+      image_url: tripoImageUrl,
       model_type: "charm",
       options: {
         background: "transparent",
@@ -436,25 +456,40 @@ export async function POST(request: NextRequest) {
       
       const b64Data = data.data[0].b64_json;
       
+      // Save the base64 data to a file in the uploads directory (works in both dev and prod)
+      const timestamp = Date.now();
+      const outputFileName = `enhanced-${timestamp}.png`;
+      const outputDir = getUploadDir();
+      
+      // Ensure directory exists
+      if (!existsSync(outputDir)) {
+        await mkdir(outputDir, { recursive: true });
+      }
+      
+      const outputPath = join(outputDir, outputFileName);
+      console.log(`📂 Saving base64 image to: ${outputPath}`);
+      
+      // Convert base64 to buffer and write to file
+      const imageBuffer = Buffer.from(b64Data, "base64");
+      await writeFile(outputPath, imageBuffer);
+      
       if (isProd) {
-        // In production, return the data URL directly to avoid file system operations
-        enhancedImageUrl = `data:image/png;base64,${b64Data}`;
-        console.log(`🔗 Created data URL for the image`);
+        // In production on Vercel, we need to return a real URL, not a data URL (CSP issues)
+        // We can either:
+        // 1. Upload to cloud storage (ideal but requires setup)
+        // 2. Return enhanced_image_id that the client can use to fetch the image later
+        
+        // For now, we'll return a temporary identifier that client can use
+        // to fetch the image from a dedicated endpoint
+        const imageId = `enhanced-${timestamp}`;
+        enhancedImageUrl = `/api/enhanced-images/${imageId}`;
+        
+        // Store image metadata to help locate it later
+        // Ideally, this would go in a database or KV store, but for demo
+        // we'll rely on the file name pattern
+        console.log(`🔗 Created API endpoint URL for the image: ${enhancedImageUrl}`);
       } else {
-        // In development, save to the filesystem
-        // Save the base64 data to a file in the public/uploads directory
-        const timestamp = Date.now();
-        const outputFileName = `enhanced-${timestamp}.png`;
-        const outputDir = getUploadDir();
-        const outputPath = join(outputDir, outputFileName);
-        
-        console.log(`📂 Saving base64 image to: ${outputPath}`);
-        
-        // Convert base64 to buffer and write to file
-        const imageBuffer = Buffer.from(b64Data, "base64");
-        await writeFile(outputPath, imageBuffer);
-        
-        // Construct a URL that points to the saved image
+        // In development, use the local file URL
         enhancedImageUrl = `/uploads/${outputFileName}`;
         console.log(`🔗 Created local URL for the image: ${enhancedImageUrl}`);
       }

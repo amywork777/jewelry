@@ -177,15 +177,33 @@ export function AIImageGenerator() {
     
     try {
       addLog("Downloading enhanced image");
-      const response = await fetch(generatedImageUrl);
       
-      if (!response.ok) {
-        addLog(`Download failed with status: ${response.status}`);
-        throw new Error(`Failed to download: ${response.statusText}`);
+      // Handle different types of URLs
+      let imageBlob;
+      if (generatedImageUrl.startsWith('/api/enhanced-images/')) {
+        // This is an API endpoint URL - fetch from our own API
+        const response = await fetch(generatedImageUrl);
+        
+        if (!response.ok) {
+          addLog(`Download failed with status: ${response.status}`);
+          throw new Error(`Failed to download: ${response.statusText}`);
+        }
+        
+        imageBlob = await response.blob();
+      } else {
+        // This is a direct image URL - fetch normally
+        const response = await fetch(generatedImageUrl);
+        
+        if (!response.ok) {
+          addLog(`Download failed with status: ${response.status}`);
+          throw new Error(`Failed to download: ${response.statusText}`);
+        }
+        
+        imageBlob = await response.blob();
       }
       
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      // Create download link
+      const url = window.URL.createObjectURL(imageBlob);
       const a = document.createElement("a");
       a.href = url;
       a.download = `charm-image-${Date.now()}.png`;
@@ -382,6 +400,15 @@ export function AIImageGenerator() {
                         src={generatedImageUrl}
                         alt="Enhanced"
                         className="max-h-full max-w-full object-contain rounded"
+                        onError={(e) => {
+                          console.error("Error loading image:", generatedImageUrl);
+                          addLog(`Error loading enhanced image from: ${generatedImageUrl}`);
+                          // Try with a cache buster if it's our API endpoint
+                          if (generatedImageUrl.startsWith('/api/enhanced-images/')) {
+                            const cacheBuster = `?t=${Date.now()}`;
+                            e.currentTarget.src = `${generatedImageUrl}${cacheBuster}`;
+                          }
+                        }}
                       />
                       <Button
                         type="button"
