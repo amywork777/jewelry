@@ -92,7 +92,7 @@ export function AIImageGenerator() {
     setTripoTaskId(null);
     setGeneratedImageUrl(null);
     const startTime = Date.now();
-    addLog("Starting 2.5D charm generation with GPT-image-1");
+    addLog("Starting image enhancement with GPT-image-1");
     
     try {
       // Create form data with the image and prompt
@@ -267,229 +267,243 @@ export function AIImageGenerator() {
   }, [tripoTaskId, tripoModelLoaded, toast]);
 
   return (
-    <Card className="w-full max-w-2xl mx-auto">
+    <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
         <CardTitle>2.5D Charm Generator</CardTitle>
         <CardDescription>
           Upload an image and transform it into a 2.5D relief charm with OpenAI's GPT-image-1 model
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Image Upload Area */}
-        <div
-          {...getRootProps()}
-          className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${
-            isDragActive ? "border-primary bg-primary/10" : "border-gray-300 hover:bg-gray-50"
-          } ${isGenerating ? "opacity-50 cursor-not-allowed" : ""}`}
-        >
-          <input {...getInputProps()} />
-          {previewUrl ? (
-            <div className="flex flex-col items-center gap-2">
-              <img
-                src={previewUrl}
-                alt="Preview"
-                className="max-h-[200px] max-w-full object-contain rounded-lg"
-              />
-              <p className="text-sm text-gray-500">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedFile(null);
-                    setPreviewUrl(null);
-                    setGeneratedImageUrl(null);
-                    addLog("Image removed");
-                  }}
-                  className="text-sm h-9 px-3"
-                  disabled={isGenerating}
+      <CardContent className="space-y-6">
+        <Tabs defaultValue="image" onValueChange={setActiveTab} value={activeTab}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="image">Image</TabsTrigger>
+            <TabsTrigger value="model" disabled={!tripoTaskId || !tripoModelLoaded}>
+              3D Model {tripoTaskId && !tripoModelLoaded && <RefreshCw className="ml-2 h-3 w-3 animate-spin" />}
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="image" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Image Upload Section - Left Column */}
+              <div className="space-y-4">
+                <Label>Upload Image</Label>
+                <div
+                  {...getRootProps()}
+                  className={`border-2 border-dashed rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer transition h-48
+                    ${isDragActive ? "border-primary bg-primary/10" : "border-muted-foreground/25 hover:bg-muted/25"} 
+                    ${isGenerating ? "opacity-50 pointer-events-none" : ""}`}
                 >
-                  <Repeat className="h-4 w-4 mr-2" /> Change image
-                </Button>
-              </p>
-            </div>
-          ) : (
-            <div className="py-8">
-              <div className="flex justify-center">
-                <Camera className="h-10 w-10 text-gray-400" />
-              </div>
-              <p className="mt-2 text-sm font-medium">
-                Tap to upload or drag an image
-              </p>
-              <p className="mt-1 text-xs text-gray-500">
-                JPG, PNG, or WebP up to 10MB
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Prompt Input */}
-        <div className="space-y-2">
-          <Label htmlFor="prompt">Additional Instructions (Optional)</Label>
-          <Textarea
-            id="prompt"
-            placeholder="Add custom details or modifications to the 2.5D charm design. The system will use a comprehensive 2.5D charm prompt by default."
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            disabled={isGenerating}
-            className="resize-none"
-            rows={3}
-          />
-        </div>
-        
-        {/* Process Status */}
-        {isGenerating && (
-          <div className="border rounded-lg p-4 bg-gray-50">
-            <div className="flex items-center space-x-2">
-              <Loader className="h-4 w-4 animate-spin text-gray-500" />
-              <span className="text-sm font-medium">{getStepDescription()}</span>
-            </div>
-            <div className="mt-2 h-2 bg-gray-200 rounded-full">
-              <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: '100%' }}></div>
-            </div>
-          </div>
-        )}
-
-        {/* Generated Content Display */}
-        {generatedImageUrl && (
-          <div className="border rounded-lg p-4 space-y-3">
-            <div className="flex justify-between items-center">
-              <h3 className="font-medium">Generated Charm</h3>
-              {processingTime && (
-                <span className="text-xs text-gray-500">
-                  Generated in {processingTime.toFixed(1)}s
-                </span>
-              )}
-            </div>
-            
-            {/* Tabs for 2D/3D Views */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="image" className="flex items-center">
-                  <ImageIcon2 className="h-4 w-4 mr-2" />
-                  <span>2.5D Image</span>
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="model" 
-                  disabled={!tripoTaskId}
-                  className="flex items-center"
-                >
-                  <Box className="h-4 w-4 mr-2" />
-                  <span>3D Model {!tripoModelLoaded && tripoTaskId && "..."}</span>
-                </TabsTrigger>
-              </TabsList>
-              
-              {/* 2.5D Image Tab */}
-              <TabsContent value="image" className="mt-2">
-                <div className="flex justify-center">
-                  <img
-                    src={generatedImageUrl}
-                    alt="2.5D Charm"
-                    className="max-h-[300px] max-w-full object-contain rounded-lg"
-                    onError={(e) => {
-                      addLog("Error loading generated image");
-                      console.error("Image failed to load:", generatedImageUrl);
-                      e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Cpath d='M30,30 L70,70 M30,70 L70,30' stroke='%23666' stroke-width='2'/%3E%3C/svg%3E";
-                      e.currentTarget.alt = "Failed to load image";
-                      e.currentTarget.className = "max-h-[300px] max-w-full object-contain rounded-lg border border-red-300";
-                    }}
+                  <input {...getInputProps()} />
+                  {previewUrl ? (
+                    <div className="relative h-full w-full flex items-center justify-center">
+                      <img 
+                        src={previewUrl} 
+                        alt="Preview" 
+                        className="max-h-full max-w-full object-contain rounded"
+                      />
+                      {!isGenerating && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="absolute bottom-1 right-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedFile(null);
+                            setPreviewUrl(null);
+                          }}
+                        >
+                          <Repeat className="h-3 w-3 mr-1" /> Change
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <Camera className="h-8 w-8 mb-2 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground text-center">
+                        Drop an image here or click to upload
+                      </p>
+                      <p className="text-xs text-muted-foreground/70 mt-1">
+                        Supports JPG, PNG (max 10MB)
+                      </p>
+                    </>
+                  )}
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="prompt">Prompt (Optional)</Label>
+                  <Textarea
+                    id="prompt"
+                    placeholder="Describe how you want to enhance the image (optional)"
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    className="min-h-[80px]"
+                    disabled={isGenerating}
                   />
                 </div>
-                <div className="flex justify-end mt-2">
+                
+                <div className="flex gap-2">
                   <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={downloadGeneratedImage}
+                    onClick={handleGenerateImage}
+                    disabled={!selectedFile || isGenerating}
+                    className="w-full"
                   >
-                    <Download className="h-4 w-4 mr-2" /> Download
+                    {isGenerating ? (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        {getStepDescription()}
+                      </>
+                    ) : (
+                      <>
+                        <ImageIcon className="mr-2 h-4 w-4" />
+                        Enhance Image
+                      </>
+                    )}
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    onClick={handleReset}
+                    disabled={isGenerating}
+                  >
+                    <Repeat className="h-4 w-4" />
                   </Button>
                 </div>
-              </TabsContent>
+              </div>
               
-              {/* 3D Model Tab */}
-              <TabsContent value="model" className="mt-2">
-                {tripoTaskId ? (
-                  <div className="flex flex-col items-center">
-                    {!tripoModelLoaded ? (
-                      <div className="p-8 flex flex-col items-center">
-                        <Loader className="h-8 w-8 animate-spin text-gray-400 mb-4" />
-                        <p className="text-sm text-gray-500">3D model is being generated...</p>
-                        <p className="text-xs text-gray-400 mt-1">This may take a minute or two</p>
+              {/* Enhanced Image Display - Right Column */}
+              <div className="space-y-4">
+                <Label>Enhanced Image {isGenerating && <RefreshCw className="inline-block h-3 w-3 animate-spin ml-1" />}</Label>
+                <div className="border-2 border-dashed rounded-lg p-4 flex items-center justify-center h-48 bg-muted/10">
+                  {generatedImageUrl ? (
+                    <div className="relative h-full w-full flex items-center justify-center">
+                      <img
+                        src={generatedImageUrl}
+                        alt="Enhanced"
+                        className="max-h-full max-w-full object-contain rounded"
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="absolute bottom-1 right-1"
+                        onClick={downloadGeneratedImage}
+                      >
+                        <Download className="h-3 w-3 mr-1" /> Save
+                      </Button>
+                    </div>
+                  ) : isGenerating ? (
+                    <div className="flex flex-col items-center justify-center text-center space-y-2">
+                      <RefreshCw className="h-8 w-8 animate-spin text-primary/70" />
+                      <p className="text-sm text-muted-foreground">{getStepDescription()}</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-center space-y-1">
+                      <ImageIcon2 className="h-8 w-8 text-muted-foreground/50" />
+                      <p className="text-sm text-muted-foreground">Enhanced image will appear here</p>
+                    </div>
+                  )}
+                </div>
+                
+                {generatedImageUrl && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <Label>Processing Time</Label>
+                      <span className="text-xs text-muted-foreground">
+                        {processingTime !== null ? `${processingTime.toFixed(1)}s` : "--"}
+                      </span>
+                    </div>
+                    
+                    {tripoTaskId && (
+                      <div className="flex justify-between">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setActiveTab("model")}
+                          disabled={!tripoModelLoaded}
+                          className="w-full"
+                        >
+                          {tripoModelLoaded ? (
+                            <>
+                              <Box className="mr-2 h-4 w-4" />
+                              View 3D Model
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                              Generating 3D...
+                            </>
+                          )}
+                        </Button>
                       </div>
-                    ) : (
-                      <iframe
-                        src={`https://tripo3d.ai/embed/${tripoTaskId}`}
-                        width="100%"
-                        height="400"
-                        frameBorder="0"
-                        allow="autoplay; fullscreen"
-                        className="rounded-lg"
-                        onLoad={handleTripoIframeLoad}
-                      ></iframe>
                     )}
                   </div>
-                ) : (
-                  <div className="p-8 text-center text-gray-500">
-                    <p>No 3D model available yet</p>
-                  </div>
                 )}
-              </TabsContent>
-            </Tabs>
-          </div>
-        )}
-
-        {/* Debug Log Display */}
-        {logMessages.length > 0 && (
-          <div className="border rounded-lg p-4 space-y-2 bg-gray-50">
-            <div className="flex justify-between items-center">
-              <h3 className="font-medium text-sm">Debug Logs</h3>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 text-xs"
-                onClick={() => setLogMessages([])}
-              >
-                Clear
-              </Button>
+              </div>
             </div>
-            <div className="text-xs font-mono bg-black text-green-400 p-2 rounded h-32 overflow-y-auto">
-              {logMessages.map((msg, i) => (
-                <div key={i} className="mb-1">
-                  {msg}
+            
+            {/* Activity Log */}
+            {logMessages.length > 0 && (
+              <div className="mt-6 space-y-2">
+                <Label className="flex justify-between items-center">
+                  <span>Activity Log</span>
+                  <span className="text-xs text-muted-foreground">{logMessages.length} events</span>
+                </Label>
+                <div className="border rounded p-3 bg-muted/10 h-32 overflow-y-auto text-xs font-mono">
+                  {logMessages.map((msg, i) => (
+                    <div key={i} className="py-0.5">
+                      {msg}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="flex gap-2">
-          <Button
-            className="flex-1 flex items-center justify-center"
-            onClick={handleGenerateImage}
-            disabled={isGenerating || !selectedFile}
-          >
-            {isGenerating ? (
-              <>
-                <Loader className="h-4 w-4 mr-2 animate-spin" />
-                <span>Processing...</span>
-              </>
-            ) : (
-              <>
-                <ImageIcon className="h-4 w-4 mr-2" />
-                <span>Create 2.5D Charm</span>
-              </>
+              </div>
             )}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleReset}
-            disabled={isGenerating}
-          >
-            <RefreshCw className="h-4 w-4 mr-2" /> Reset
-          </Button>
-        </div>
+          </TabsContent>
+          
+          <TabsContent value="model">
+            {tripoTaskId && tripoModelLoaded ? (
+              <div className="aspect-video w-full border rounded overflow-hidden">
+                <iframe
+                  src={`https://viewer.tripo3d.ai/models/${tripoTaskId}?autorotate=true&background=gradient`}
+                  className="w-full h-full"
+                  onLoad={handleTripoIframeLoad}
+                  allow="fullscreen"
+                ></iframe>
+              </div>
+            ) : (
+              <div className="aspect-video w-full border rounded flex items-center justify-center">
+                <div className="text-center">
+                  <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2" />
+                  <p>Loading 3D model...</p>
+                </div>
+              </div>
+            )}
+            
+            {tripoTaskId && (
+              <div className="mt-4 flex justify-between items-center">
+                <Button
+                  variant="outline"
+                  onClick={() => setActiveTab("image")}
+                >
+                  <ImageIcon className="mr-2 h-4 w-4" />
+                  Back to Image
+                </Button>
+                
+                <a
+                  href={`https://viewer.tripo3d.ai/models/${tripoTaskId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Button variant="secondary">
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Open in Fullscreen
+                  </Button>
+                </a>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );

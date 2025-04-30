@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { join } from "path";
-import { writeFile, mkdir } from "fs/promises";
+import { writeFile, mkdir, readFile } from "fs/promises";
 import { existsSync } from "fs";
+import { tmpdir } from "os";
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -11,6 +12,23 @@ const openai = new OpenAI({
 
 // Initialize Tripo API key
 const TRIPO_API_KEY = process.env.TRIPO_API_KEY;
+
+// Determine upload directory based on environment
+const isProd = process.env.NODE_ENV === "production";
+const getUploadDir = () => {
+  // In production (Vercel/AWS Lambda), use /tmp
+  // In development, use public/uploads
+  return isProd
+    ? join(tmpdir(), "uploads")
+    : join(process.cwd(), "public", "uploads");
+};
+
+// Get the URL path for a file
+const getFileUrlPath = (filename: string) => {
+  return isProd
+    ? `data:image/png;base64,${filename}` // In prod, return the filename as is (it will be a base64 string)
+    : `/uploads/${filename}`; // In dev, return the path to the file
+};
 
 // Default base prompt to generate a minimalist jewelry image
 const DEFAULT_PROMPT = `Create a minimalist, elegant piece of jewelry. The image should have a clean background, preferably white or a light neutral color. The jewelry piece should be the central focus, with sleek lines and a modern aesthetic. Ideal for a high-end jewelry product catalog. The rendering should be photorealistic with good lighting to highlight the material's texture and shine.`;
@@ -77,7 +95,7 @@ async function saveUploadedFile(formData: FormData): Promise<string> {
   }
 
   // Create uploads directory if it doesn't exist
-  const uploadsDir = join(process.cwd(), "public", "uploads");
+  const uploadsDir = getUploadDir();
   if (!existsSync(uploadsDir)) {
     await mkdir(uploadsDir, { recursive: true });
   }
@@ -91,8 +109,14 @@ async function saveUploadedFile(formData: FormData): Promise<string> {
   const buffer = Buffer.from(await file.arrayBuffer());
   await writeFile(filePath, buffer);
 
-  // Return the public path to the file
-  return `/uploads/${fileName}`;
+  if (isProd) {
+    // In production, we'll pass around the file path (not exposed publicly)
+    // Later we'll read this file and convert to base64 when needed
+    return filePath;
+  } else {
+    // In development, return the public URL path
+    return `/uploads/${fileName}`;
+  }
 }
 
 // Helper function to get file extension
@@ -291,23 +315,47 @@ export async function POST(request: NextRequest) {
     const uploadedImagePath = await saveUploadedFile(formData);
     console.log(`📁 Image saved at: ${uploadedImagePath}`);
     
-    // Create the full URL for the image
-    const baseUrl = process.env.NODE_ENV === "development" 
-      ? `http://localhost:${process.env.PORT || 3000}` 
-      : process.env.NEXT_PUBLIC_APP_URL || "";
+    // Create the full URL for the image in development
+    // In production, we'll use the file path directly
+    let fullImageUrl: string;
+    let imageBlob: Blob;
     
-    const fullImageUrl = `${baseUrl}${uploadedImagePath}`;
-    console.log(`🔗 Full image URL: ${fullImageUrl}`);
+    if (isProd) {
+      // In production, read the file from the given path
+      const fileBuffer = await readFile(uploadedImagePath);
+      imageBlob = new Blob([fileBuffer], { type: 'image/png' });
+      fullImageUrl = uploadedImagePath; // Just use the path reference, not exposed publicly
+    } else {
+      // In development, create a URL to the file
+      const baseUrl = process.env.NODE_ENV === "development" 
+        ? `http://localhost:${process.env.PORT || 3000}` 
+        : process.env.NEXT_PUBLIC_APP_URL || "";
+      
+      fullImageUrl = `${baseUrl}${uploadedImagePath}`;
+      console.log(`🔗 Full image URL: ${fullImageUrl}`);
+      
+      // Fetch the image for processing
+      console.log(`🔍 Fetching image from: ${fullImageUrl}`);
+      const imageResponse = await fetch(fullImageUrl);
+      
+      if (!imageResponse.ok) {
+        console.error(`❌ Failed to fetch image: ${imageResponse.status} ${imageResponse.statusText}`);
+        throw new Error(`Failed to fetch image: ${imageResponse.status} ${imageResponse.statusText}`);
+      }
+      
+      imageBlob = await imageResponse.blob();
+    }
+    
+    console.log(`📊 Image blob size: ${Math.round(imageBlob.size / 1024)} KB`);
+    
+    const imageBase64 = await blobToBase64(imageBlob);
+    console.log(`📊 Base64 image length: ${imageBase64.length} characters`);
     
     // Prepare the GPT-image-1 prompt
     const finalPrompt = userPrompt.trim() ? `${CHARM_PROMPT}\n\nAdditional instructions: ${userPrompt}` : CHARM_PROMPT;
     
     console.log(`📝 Using GPT-image-1 prompt (first 100 chars): ${finalPrompt.substring(0, 100)}...`);
     console.log(`📝 Prompt length: ${finalPrompt.length} characters`);
-    
-    // Get the full path to the uploaded file so we can read it
-    const fullFilePath = join(process.cwd(), "public", uploadedImagePath);
-    console.log(`📂 Full file path: ${fullFilePath}`);
     
     // Create a FormData for the multipart upload to OpenAI
     const openAIFormData = new FormData();
@@ -386,21 +434,30 @@ export async function POST(request: NextRequest) {
       // For /images/edits endpoint which returns base64
       console.log(`✅ Image successfully generated with GPT-image-1 (base64 format)`);
       
-      // Save the base64 data to a file in the public/uploads directory
-      const timestamp = Date.now();
-      const outputFileName = `enhanced-${timestamp}.png`;
-      const outputDir = join(process.cwd(), "public", "uploads");
-      const outputPath = join(outputDir, outputFileName);
+      const b64Data = data.data[0].b64_json;
       
-      console.log(`📂 Saving base64 image to: ${outputPath}`);
-      
-      // Convert base64 to buffer and write to file
-      const imageBuffer = Buffer.from(data.data[0].b64_json, "base64");
-      await writeFile(outputPath, imageBuffer);
-      
-      // Construct a URL that points to the saved image
-      enhancedImageUrl = `/uploads/${outputFileName}`;
-      console.log(`🔗 Created local URL for the image: ${enhancedImageUrl}`);
+      if (isProd) {
+        // In production, return the data URL directly to avoid file system operations
+        enhancedImageUrl = `data:image/png;base64,${b64Data}`;
+        console.log(`🔗 Created data URL for the image`);
+      } else {
+        // In development, save to the filesystem
+        // Save the base64 data to a file in the public/uploads directory
+        const timestamp = Date.now();
+        const outputFileName = `enhanced-${timestamp}.png`;
+        const outputDir = getUploadDir();
+        const outputPath = join(outputDir, outputFileName);
+        
+        console.log(`📂 Saving base64 image to: ${outputPath}`);
+        
+        // Convert base64 to buffer and write to file
+        const imageBuffer = Buffer.from(b64Data, "base64");
+        await writeFile(outputPath, imageBuffer);
+        
+        // Construct a URL that points to the saved image
+        enhancedImageUrl = `/uploads/${outputFileName}`;
+        console.log(`🔗 Created local URL for the image: ${enhancedImageUrl}`);
+      }
     } else {
       console.error(`❌ No image URL or base64 data in response:`, data.data[0]);
       throw new Error("OpenAI GPT-image-1 API returned image in unknown format");
