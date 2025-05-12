@@ -330,7 +330,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    
+
     // Save the uploaded file and get its public path
     const uploadedImagePath = await saveUploadedFile(formData);
     console.log(`📁 Image saved at: ${uploadedImagePath}`);

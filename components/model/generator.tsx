@@ -1400,8 +1400,7 @@ export function ModelGenerator() {
                 <div className="space-y-4">
                   <div>
                     <p className="text-sm text-center mb-4">
-                      Upload a photo to create a beautiful 2.5D charm using GPT-image-1. 
-                      The process will first create a raised-relief 2.5D charm design, then convert it to 3D.
+                      Upload a photo to create a beautiful charm.
                     </p>
                   </div>
                   <div 
