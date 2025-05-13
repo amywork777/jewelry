@@ -214,7 +214,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
         <Canvas 
           shadows={true}
           dpr={[1, 2]}
-          style={{ height: '100%' }}
+          style={{ width: '100%', height: '100%', display: 'block', objectFit: 'contain' }}
         >
           <PerspectiveCamera makeDefault position={[0, 0, 150]} fov={30} />
           <ambientLight intensity={0.5} />
@@ -295,7 +295,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                       ]}
                       rotation={[
                         0,
-                        0,
+                        Math.PI / 2,
                         0
                       ]}
                     >
