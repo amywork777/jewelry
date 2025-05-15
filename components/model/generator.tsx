@@ -433,16 +433,7 @@ export function ModelGenerator() {
       })
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Error generating model:", errorText);
-        setStatus("error")
-        setIsGenerating(false)
-        toast({
-          title: "Error",
-          description: "Failed to generate model. Please try again.",
-          variant: "destructive",
-        })
-        return
+        throw new Error("Failed to start model generation")
       }
 
       const data = await response.json()
@@ -507,13 +498,13 @@ export function ModelGenerator() {
       })
 
       if (!enhanceResponse.ok) {
-        const errorText = await enhanceResponse.text();
-        console.error("Error from enhance-image-with-gpt:", errorText);
-        throw new Error("Failed to enhance image: " + errorText);
+        const errorData = await enhanceResponse.json()
+        console.error("Error from enhance-image-with-gpt:", errorData)
+        throw new Error("Failed to enhance image: " + (errorData.error || "Unknown error"))
       }
 
-      const enhanceData = await enhanceResponse.json();
-      console.log("Enhanced image data:", enhanceData);
+      const enhanceData = await enhanceResponse.json()
+      console.log("Enhanced image data:", enhanceData)
 
       // If Tripo integration already happened in the enhancement step
       if (enhanceData.tripoTaskId) {
@@ -579,9 +570,7 @@ export function ModelGenerator() {
       })
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Error from generate-model:", errorText);
-        throw new Error("Failed to start model generation: " + errorText);
+        throw new Error("Failed to start model generation")
       }
 
       const data = await response.json()
@@ -783,9 +772,9 @@ export function ModelGenerator() {
       });
 
       if (!generationResponse.ok) {
-        const errorText = await generationResponse.text();
-        console.error("Error from generate-model:", errorText);
-        throw new Error("Failed to start model generation: " + errorText);
+        const errorData = await generationResponse.json();
+        // console.error("Generation API error:", errorData);
+        throw new Error("Failed to start model generation: " + (errorData.error || "Unknown error"));
       }
 
       const generationData = await generationResponse.json();
@@ -1411,7 +1400,8 @@ export function ModelGenerator() {
                 <div className="space-y-4">
                   <div>
                     <p className="text-sm text-center mb-4">
-                      Upload a photo to create a beautiful charm.
+                      Upload a photo to create a beautiful 2.5D charm using GPT-image-1. 
+                      The process will first create a raised-relief 2.5D charm design, then convert it to 3D.
                     </p>
                   </div>
                   <div 
