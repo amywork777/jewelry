@@ -433,7 +433,16 @@ export function ModelGenerator() {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to start model generation")
+        const errorText = await response.text();
+        console.error("Error generating model:", errorText);
+        setStatus("error")
+        setIsGenerating(false)
+        toast({
+          title: "Error",
+          description: "Failed to generate model. Please try again.",
+          variant: "destructive",
+        })
+        return
       }
 
       const data = await response.json()
@@ -498,13 +507,13 @@ export function ModelGenerator() {
       })
 
       if (!enhanceResponse.ok) {
-        const errorData = await enhanceResponse.json()
-        console.error("Error from enhance-image-with-gpt:", errorData)
-        throw new Error("Failed to enhance image: " + (errorData.error || "Unknown error"))
+        const errorText = await enhanceResponse.text();
+        console.error("Error from enhance-image-with-gpt:", errorText);
+        throw new Error("Failed to enhance image: " + errorText);
       }
 
-      const enhanceData = await enhanceResponse.json()
-      console.log("Enhanced image data:", enhanceData)
+      const enhanceData = await enhanceResponse.json();
+      console.log("Enhanced image data:", enhanceData);
 
       // If Tripo integration already happened in the enhancement step
       if (enhanceData.tripoTaskId) {
@@ -570,7 +579,9 @@ export function ModelGenerator() {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to start model generation")
+        const errorText = await response.text();
+        console.error("Error from generate-model:", errorText);
+        throw new Error("Failed to start model generation: " + errorText);
       }
 
       const data = await response.json()
@@ -772,9 +783,9 @@ export function ModelGenerator() {
       });
 
       if (!generationResponse.ok) {
-        const errorData = await generationResponse.json();
-        // console.error("Generation API error:", errorData);
-        throw new Error("Failed to start model generation: " + (errorData.error || "Unknown error"));
+        const errorText = await generationResponse.text();
+        console.error("Error from generate-model:", errorText);
+        throw new Error("Failed to start model generation: " + errorText);
       }
 
       const generationData = await generationResponse.json();
