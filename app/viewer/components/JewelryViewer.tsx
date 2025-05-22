@@ -59,7 +59,8 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
   // Attachment options
   const [showAttachmentRing, setShowAttachmentRing] = useState(true)
   const [showExtensionBar, setShowExtensionBar] = useState(false)
-  const fixedRingSize = 0.5; // Updated thickness - was 1.5 before
+  const [ringSize, setRingSize] = useState(1.5) // New state for ring size
+  const [ringThickness, setRingThickness] = useState(0.5) // New state for ring thickness
   const [extensionLength, setExtensionLength] = useState(3)
   
   // Attachment controls
@@ -299,7 +300,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                         0
                       ]}
                     >
-                      <torusGeometry args={[1.5, 0.5, 16, 32]} />
+                      <torusGeometry args={[ringSize, ringThickness, 16, 32]} />
                       <meshStandardMaterial
                         {...materialProperties[materialType]}
                       />
@@ -484,6 +485,38 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                       onCheckedChange={setShowAttachmentRing}
                     />
                   </div>
+                  
+                  {showAttachmentRing && (
+                    <>
+                      <div className="pt-2">
+                        <Label className="font-medium mb-1 block">Ring Size</Label>
+                        <div className="flex items-center gap-2">
+                          <Slider
+                            value={[ringSize]}
+                            min={0.5}
+                            max={3}
+                            step={0.1}
+                            onValueChange={(values) => setRingSize(values[0])}
+                          />
+                          <span className="text-xs font-medium">{ringSize.toFixed(1)}mm</span>
+                        </div>
+                      </div>
+                      
+                      <div className="pt-2">
+                        <Label className="font-medium mb-1 block">Ring Thickness</Label>
+                        <div className="flex items-center gap-2">
+                          <Slider
+                            value={[ringThickness]}
+                            min={0.1}
+                            max={1}
+                            step={0.1}
+                            onValueChange={(values) => setRingThickness(values[0])}
+                          />
+                          <span className="text-xs font-medium">{ringThickness.toFixed(1)}mm</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
                   
                   <div className="flex justify-between items-center py-1">
                     <Label htmlFor="desktop-extension-bar" className="font-medium">Extension Bar</Label>
@@ -673,6 +706,54 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                         onCheckedChange={setShowAttachmentRing}
                       />
                     </div>
+                    
+                    {showAttachmentRing && (
+                      <>
+                        <div className="py-1">
+                          <div className="flex justify-between items-center">
+                            <Label className="font-medium">Ring Size: {ringSize.toFixed(1)}mm</Label>
+                            <div className="flex space-x-2 mobile-controls">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => adjustValue(setRingSize, ringSize, -0.1, 0.5, 3)}
+                              >
+                                -
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => adjustValue(setRingSize, ringSize, 0.1, 0.5, 3)}
+                              >
+                                +
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="py-1">
+                          <div className="flex justify-between items-center">
+                            <Label className="font-medium">Ring Thickness: {ringThickness.toFixed(1)}mm</Label>
+                            <div className="flex space-x-2 mobile-controls">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => adjustValue(setRingThickness, ringThickness, -0.1, 0.1, 1)}
+                              >
+                                -
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => adjustValue(setRingThickness, ringThickness, 0.1, 0.1, 1)}
+                              >
+                                +
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
                     
                     <div className="flex justify-between items-center py-1">
                       <Label htmlFor="mobile-extension-bar" className="font-medium">Extension Bar</Label>
