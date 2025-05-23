@@ -39,11 +39,11 @@ export default function ModelImport({ onImport }: ModelImportProps) {
         // Center the geometry
         geometry.center()
         
-        // Normalize the size
+        // Normalize the size to 0.6 inches (15.24mm) in largest dimension
         const box = new THREE.Box3().setFromObject(new THREE.Mesh(geometry))
         const size = box.getSize(new THREE.Vector3())
         const maxDimension = Math.max(size.x, size.y, size.z)
-        const scale = 10 / maxDimension // Scale to a reasonable size
+        const scale = 15.24 / maxDimension // Scale to 0.6 inches (15.24mm)
         geometry.scale(scale, scale, scale)
         
         onImport(geometry)

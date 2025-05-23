@@ -52,8 +52,20 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
   
   // Material properties mapping
   const materialProperties = {
-    'gold': { color: '#FFD700', roughness: 0.1, metalness: 0.9 },
-    'silver': { color: '#C0C0C0', roughness: 0.1, metalness: 0.9 }
+    'gold': { 
+      color: '#FFD700', 
+      roughness: 0.05, 
+      metalness: 0.95,
+      clearcoat: 0.3,
+      clearcoatRoughness: 0.1
+    },
+    'silver': { 
+      color: '#E8E8E8', 
+      roughness: 0.03, 
+      metalness: 0.98,
+      clearcoat: 0.5,
+      clearcoatRoughness: 0.05
+    }
   }
   
   // Attachment options
@@ -84,6 +96,11 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
   // Add additional state for position tab collapsibles
   const [attachmentPositionOpen, setAttachmentPositionOpen] = useState(false)
   const [charmPositionOpen, setCharmPositionOpen] = useState(false)
+  
+  // Dimension control state
+  const [charmDimensions, setCharmDimensions] = useState({ x: 15.24, y: 15.24, z: 15.24 })
+  const [originalDimensions, setOriginalDimensions] = useState({ x: 15.24, y: 15.24, z: 15.24 })
+  const [dimensionScale, setDimensionScale] = useState({ x: 1, y: 1, z: 1 })
   
   // Check screen size on mount and window resize
   useEffect(() => {
@@ -126,12 +143,18 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
       // Center the geometry
       geometry.center();
       
-      // Normalize the size
+      // Normalize the size to 0.6 inches (15.24mm) in largest dimension
       const box = new THREE.Box3().setFromObject(new THREE.Mesh(geometry));
       const size = box.getSize(new THREE.Vector3());
       const maxDimension = Math.max(size.x, size.y, size.z);
-      const scale = 10 / maxDimension; // Scale to a reasonable size
+      const scale = 15.24 / maxDimension; // Scale to 0.6 inches (15.24mm)
       geometry.scale(scale, scale, scale);
+      
+      // Calculate and store dimensions
+      const dimensions = calculateDimensions(geometry);
+      setCharmDimensions(dimensions);
+      setOriginalDimensions(dimensions);
+      setDimensionScale({ x: 1, y: 1, z: 1 });
       
       setImportedMesh(geometry);
     } catch (error) {
@@ -144,6 +167,12 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
   
   // Handle file import
   const handleFileImport = (geometry: THREE.BufferGeometry) => {
+    // Calculate and store dimensions
+    const dimensions = calculateDimensions(geometry);
+    setCharmDimensions(dimensions);
+    setOriginalDimensions(dimensions);
+    setDimensionScale({ x: 1, y: 1, z: 1 });
+    
     setImportedMesh(geometry)
   }
   
@@ -187,139 +216,218 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
     console.log("Added to cart:", itemDetails)
   }
   
+  // Calculate current dimensions from imported mesh
+  const calculateDimensions = (geometry: THREE.BufferGeometry) => {
+    const box = new THREE.Box3().setFromObject(new THREE.Mesh(geometry))
+    const size = box.getSize(new THREE.Vector3())
+    return {
+      x: parseFloat(size.x.toFixed(2)),
+      y: parseFloat(size.y.toFixed(2)),
+      z: parseFloat(size.z.toFixed(2))
+    }
+  }
+  
+  // Handle dimension changes
+  const handleDimensionChange = (axis: 'x' | 'y' | 'z', value: number) => {
+    const newDimensions = { ...charmDimensions, [axis]: value };
+    setCharmDimensions(newDimensions);
+    
+    // Calculate new scale factors
+    const newScale = {
+      x: newDimensions.x / originalDimensions.x,
+      y: newDimensions.y / originalDimensions.y,
+      z: newDimensions.z / originalDimensions.z
+    };
+    setDimensionScale(newScale);
+  }
+  
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 h-auto gap-2 md:gap-8 font-quicksand">
-      <div className="bg-secondary rounded-xl cute-shadow overflow-hidden relative h-[40vh] md:h-[60vh] mx-auto w-full md:max-w-[calc(60vh*1.2)] flex-shrink-0">
-        {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 z-10">
-            <div className="bg-card p-4 rounded-xl cute-shadow">
-              <p className="text-card-foreground">Creating your charm...</p>
+      {/* Left side - 3D Viewer and Dimensions */}
+      <div className="space-y-4">
+        <div className="bg-secondary rounded-xl cute-shadow overflow-hidden relative h-[40vh] md:h-[60vh] mx-auto w-full md:max-w-[calc(60vh*1.2)] flex-shrink-0">
+          {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 z-10">
+              <div className="bg-card p-4 rounded-xl cute-shadow">
+                <p className="text-card-foreground">Creating your charm...</p>
+              </div>
             </div>
-          </div>
-        )}
-        
-        {loadError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 z-10">
-            <div className="bg-card p-4 rounded-xl cute-shadow">
-              <p className="text-destructive">Error: {loadError}</p>
-              <Button 
-                onClick={() => setLoadError(null)} 
-                className="mt-2 w-full bg-theme-light text-foreground hover:bg-theme-medium"
-              >
-                Try Again
-              </Button>
-            </div>
-          </div>
-        )}
-        
-        <Canvas 
-          shadows={true}
-          dpr={[1, 2]}
-          style={{ width: '100%', height: '100%', display: 'block', objectFit: 'contain' }}
-        >
-          <PerspectiveCamera makeDefault position={[0, 0, 150]} fov={30} />
-          <ambientLight intensity={0.5} />
-          <spotLight 
-            position={[10, 10, 10]} 
-            angle={0.15} 
-            penumbra={1} 
-            intensity={1.2} 
-            castShadow={true} 
-          />
-          <Bounds fit clip observe margin={1.2}>
-            <Stage
-              environment="city"
-              intensity={0.5}
-              contactShadow={true}
-              shadows={true}
-              adjustCamera={false}
-            >
-              <group ref={sceneRef}>
-                {importedMesh && charmVisible && (
-                  <group>
-                    <mesh
-                      position={[0, 0, 0]}
-                      rotation={[
-                        charmRotateX * Math.PI / 180,
-                        charmRotateY * Math.PI / 180,
-                        charmRotateZ * Math.PI / 180
-                      ]}
-                      scale={fixedCharmScale}
-                    >
-                      <primitive object={importedMesh} attach="geometry" />
-                      <meshStandardMaterial
-                        {...materialProperties[materialType]}
-                      />
-                    </mesh>
-                  </group>
-                )}
-                
-                {/* Attachment group with its own rotation and scale - separate from charm visibility */}
-                <group
-                  position={[
-                    attachmentPositionX,
-                    attachmentPositionY,
-                    attachmentPositionZ
-                  ]}
-                  rotation={[
-                    0,
-                    attachmentRotateY * Math.PI / 180,
-                    0
-                  ]}
-                  scale={fixedCharmScale * fixedAttachmentScale}
+          )}
+          
+          {loadError && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 z-10">
+              <div className="bg-card p-4 rounded-xl cute-shadow">
+                <p className="text-destructive">Error: {loadError}</p>
+                <Button 
+                  onClick={() => setLoadError(null)} 
+                  className="mt-2 w-full bg-theme-light text-foreground hover:bg-theme-medium"
                 >
-                  {/* Extension bar */}
-                  {showExtensionBar && (
-                    <mesh
-                      position={[
-                        0,
-                        (extensionLength / 2 + 1),
-                        0
-                      ]}
-                    >
-                      <cylinderGeometry args={[0.4, 0.4, extensionLength, 16]} />
-                      <meshStandardMaterial
-                        {...materialProperties[materialType]}
-                      />
-                    </mesh>
+                  Try Again
+                </Button>
+              </div>
+            </div>
+          )}
+          
+          <Canvas 
+            shadows={true}
+            dpr={[1, 2]}
+            style={{ width: '100%', height: '100%', display: 'block', objectFit: 'contain' }}
+          >
+            <PerspectiveCamera makeDefault position={[0, 0, 150]} fov={30} />
+            <ambientLight intensity={0.5} />
+            <spotLight 
+              position={[10, 10, 10]} 
+              angle={0.15} 
+              penumbra={1} 
+              intensity={1.2} 
+              castShadow={true} 
+            />
+            <Bounds fit clip observe margin={1.2}>
+              <Stage
+                environment="city"
+                intensity={0.5}
+                contactShadow={true}
+                shadows={true}
+                adjustCamera={false}
+              >
+                <group ref={sceneRef}>
+                  {importedMesh && charmVisible && (
+                    <group>
+                      <mesh
+                        position={[0, 0, 0]}
+                        rotation={[
+                          charmRotateX * Math.PI / 180,
+                          charmRotateY * Math.PI / 180,
+                          charmRotateZ * Math.PI / 180
+                        ]}
+                        scale={[
+                          fixedCharmScale * dimensionScale.x,
+                          fixedCharmScale * dimensionScale.y,
+                          fixedCharmScale * dimensionScale.z
+                        ]}
+                      >
+                        <primitive object={importedMesh} attach="geometry" />
+                        <meshPhysicalMaterial
+                          {...materialProperties[materialType]}
+                        />
+                      </mesh>
+                    </group>
                   )}
                   
-                  {/* Charm attachment ring */}
-                  {showAttachmentRing && (
-                    <mesh
-                      position={[
-                        0, 
-                        showExtensionBar 
-                          ? (extensionLength + 2.2)
-                          : 4, 
-                        0
-                      ]}
-                      rotation={[
-                        0,
-                        Math.PI / 2,
-                        0
-                      ]}
-                    >
-                      <torusGeometry args={[ringSize, ringThickness, 16, 32]} />
-                      <meshStandardMaterial
-                        {...materialProperties[materialType]}
-                      />
-                    </mesh>
-                  )}
+                  {/* Attachment group with its own rotation and scale - separate from charm visibility */}
+                  <group
+                    position={[
+                      attachmentPositionX,
+                      attachmentPositionY,
+                      attachmentPositionZ
+                    ]}
+                    rotation={[
+                      0,
+                      attachmentRotateY * Math.PI / 180,
+                      0
+                    ]}
+                    scale={fixedCharmScale * fixedAttachmentScale}
+                  >
+                    {/* Extension bar */}
+                    {showExtensionBar && (
+                      <mesh
+                        position={[
+                          0,
+                          (extensionLength / 2 + 1),
+                          0
+                        ]}
+                      >
+                        <cylinderGeometry args={[0.4, 0.4, extensionLength, 16]} />
+                        <meshPhysicalMaterial
+                          {...materialProperties[materialType]}
+                        />
+                      </mesh>
+                    )}
+                    
+                    {/* Charm attachment ring */}
+                    {showAttachmentRing && (
+                      <mesh
+                        position={[
+                          0, 
+                          showExtensionBar 
+                            ? (extensionLength + 2.2)
+                            : 4, 
+                          0
+                        ]}
+                        rotation={[
+                          0,
+                          Math.PI / 2,
+                          0
+                        ]}
+                      >
+                        <torusGeometry args={[ringSize, ringThickness, 16, 32]} />
+                        <meshPhysicalMaterial
+                          {...materialProperties[materialType]}
+                        />
+                      </mesh>
+                    )}
+                  </group>
                 </group>
-              </group>
-            </Stage>
-          </Bounds>
-          <OrbitControls makeDefault />
-        </Canvas>
+              </Stage>
+            </Bounds>
+            <OrbitControls makeDefault />
+          </Canvas>
+          
+          {/* Overlay for STL upload if no mesh is imported and not in readOnly mode */}
+          {!importedMesh && !readOnly && !stlUrl && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 backdrop-blur-sm rounded-xl">
+              <div className="bg-card p-6 rounded-xl cute-shadow max-w-md mx-auto">
+                <h3 className="text-lg font-semibold mb-2 text-center text-card-foreground">Design Your Own Charm</h3>
+                <ModelImport onImport={handleFileImport} />
+              </div>
+            </div>
+          )}
+        </div>
         
-        {/* Overlay for STL upload if no mesh is imported and not in readOnly mode */}
-        {!importedMesh && !readOnly && !stlUrl && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 backdrop-blur-sm rounded-xl">
-            <div className="bg-card p-6 rounded-xl cute-shadow max-w-md mx-auto">
-              <h3 className="text-lg font-semibold mb-2 text-center text-card-foreground">Design Your Own Charm</h3>
-              <p className="text-center text-muted-foreground mb-4">Standard size: 1 inch (25.4mm)</p>
-              <ModelImport onImport={handleFileImport} />
+        {/* Dimension Controls - Always visible when mesh is imported */}
+        {importedMesh && (
+          <div className="bg-card p-4 rounded-xl cute-shadow">
+            <h4 className="text-md font-medium mb-3 text-card-foreground">Charm Dimensions</h4>
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <Label className="font-medium mb-2 block">
+                  Width (X): {charmDimensions.x}mm ({(charmDimensions.x / 25.4).toFixed(2)}")
+                </Label>
+                <Slider
+                  value={[charmDimensions.x]}
+                  min={1}
+                  max={50}
+                  step={0.1}
+                  onValueChange={(values) => handleDimensionChange('x', values[0])}
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <Label className="font-medium mb-2 block">
+                  Height (Y): {charmDimensions.y}mm ({(charmDimensions.y / 25.4).toFixed(2)}")
+                </Label>
+                <Slider
+                  value={[charmDimensions.y]}
+                  min={1}
+                  max={50}
+                  step={0.1}
+                  onValueChange={(values) => handleDimensionChange('y', values[0])}
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <Label className="font-medium mb-2 block">
+                  Depth (Z): {charmDimensions.z}mm ({(charmDimensions.z / 25.4).toFixed(2)}")
+                </Label>
+                <Slider
+                  value={[charmDimensions.z]}
+                  min={1}
+                  max={50}
+                  step={0.1}
+                  onValueChange={(values) => handleDimensionChange('z', values[0])}
+                  className="w-full"
+                />
+              </div>
             </div>
           </div>
         )}
@@ -498,7 +606,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                             step={0.1}
                             onValueChange={(values) => setRingSize(values[0])}
                           />
-                          <span className="text-xs font-medium">{ringSize.toFixed(1)}mm</span>
+                          <span className="text-xs font-medium">{ringSize.toFixed(1)}mm ({(ringSize / 25.4).toFixed(3)}")</span>
                         </div>
                       </div>
                       
@@ -512,7 +620,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                             step={0.1}
                             onValueChange={(values) => setRingThickness(values[0])}
                           />
-                          <span className="text-xs font-medium">{ringThickness.toFixed(1)}mm</span>
+                          <span className="text-xs font-medium">{ringThickness.toFixed(1)}mm ({(ringThickness / 25.4).toFixed(3)}")</span>
                         </div>
                       </div>
                     </>
@@ -538,7 +646,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                           step={0.5}
                           onValueChange={(values) => setExtensionLength(values[0])}
                         />
-                        <span className="text-xs font-medium">{extensionLength}mm</span>
+                        <span className="text-xs font-medium">{extensionLength}mm ({(extensionLength / 25.4).toFixed(2)}")</span>
                       </div>
                     </div>
                   )}
@@ -711,7 +819,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                       <>
                         <div className="py-1">
                           <div className="flex justify-between items-center">
-                            <Label className="font-medium">Ring Size: {ringSize.toFixed(1)}mm</Label>
+                            <Label className="font-medium">Ring Size: {ringSize.toFixed(1)}mm ({(ringSize / 25.4).toFixed(3)}")</Label>
                             <div className="flex space-x-2 mobile-controls">
                               <Button 
                                 variant="outline" 
@@ -733,7 +841,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                         
                         <div className="py-1">
                           <div className="flex justify-between items-center">
-                            <Label className="font-medium">Ring Thickness: {ringThickness.toFixed(1)}mm</Label>
+                            <Label className="font-medium">Ring Thickness: {ringThickness.toFixed(1)}mm ({(ringThickness / 25.4).toFixed(3)}")</Label>
                             <div className="flex space-x-2 mobile-controls">
                               <Button 
                                 variant="outline" 
@@ -767,7 +875,7 @@ export default function JewelryViewer({ stlUrl, readOnly = false }: JewelryViewe
                     {showExtensionBar && (
                       <div className="py-1">
                         <div className="flex justify-between items-center">
-                          <Label className="font-medium">Length: {extensionLength}mm</Label>
+                          <Label className="font-medium">Length: {extensionLength}mm ({(extensionLength / 25.4).toFixed(2)}")</Label>
                           <div className="flex space-x-2 mobile-controls">
                             <Button 
                               variant="outline" 
